@@ -6,7 +6,7 @@ export const mainMenuKb = () =>
     [Markup.button.callback('🧾 Создать сделку', 'deal:create')],
     [Markup.button.callback('👛 Добавить/изменить кошелёк', 'wallet:manage')],
     [Markup.button.callback('🌐 Change language', 'lang:menu')],
-    [Markup.button.url('📞 Поддержка', 'https://t.me/your_support')]
+    [Markup.button.url('📞 Поддержка', 'https://t.me/GiftSecureSupport')]
   ])
 
 // Выбор валюты для сделки
