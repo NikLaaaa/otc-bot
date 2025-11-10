@@ -4,6 +4,7 @@ import { join } from 'node:path'
 
 const file = join(process.cwd(), 'data.json')
 const adapter = new JSONFile(file)
+
 const db = new Low(adapter, { deals: {}, users: {} })
 
 export async function initDB() {
