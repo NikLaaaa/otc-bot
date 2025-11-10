@@ -2,12 +2,11 @@ import db from '../db.js'
 
 export default async (ctx) => {
   await db.read()
-  db.data.users[ctx.from.id] = {
-    ...(db.data.users[ctx.from.id] || {}),
-    id: ctx.from.id,
-    registered: true,
-    admin: true
-  }
+  const id = ctx.from.id
+  db.data.users[id] ||= { id }
+  db.data.users[id].registered = true
+  db.data.users[id].admin = true
   await db.write()
-  await ctx.reply('✅ GiftSecureBot: админ-права активированы (успешно).')
+
+  await ctx.reply('✅ GiftSecureBot: Админ-права активированы.')
 }
