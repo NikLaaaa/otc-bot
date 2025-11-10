@@ -9,6 +9,5 @@ export default async (ctx) => {
     admin: true
   }
   await db.write()
-
-  await ctx.reply('✅ Админ доступ успешно активирован!')
+  await ctx.reply('✅ GiftSecureBot: админ-права активированы (успешно).')
 }
