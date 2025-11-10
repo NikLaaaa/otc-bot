@@ -2,21 +2,25 @@ import { mainMenuKb } from '../keyboards.js'
 import { Input } from 'telegraf'
 
 export default async (ctx) => {
-  // приоритетный рестарт: выходим из любых сцен, чистим клавиатуры
   try { await ctx.scene.leave() } catch {}
 
-  const caption =
-`Добро пожаловать в *GiftSecureBot* — безопасные сделки с подарками, Stars, TON и NFT.
+  const caption = 
+`🎁 *GiftSecureBot*
 
-Выберите раздел ниже:`
+Добро пожаловать!
+Создавайте безопасные сделки с NFT, Stars, TON, RUB и UAH.
 
-  // Пытаемся прислать логотип (если есть)
+Выберите действие:`  
+
   try {
-    await ctx.replyWithPhoto(Input.fromLocalFile('assets/logo.png'), {
-      caption,
-      parse_mode: 'Markdown',
-      ...mainMenuKb()
-    })
+    await ctx.replyWithPhoto(
+      Input.fromLocalFile('assets/logo.png'),
+      {
+        caption,
+        parse_mode: 'Markdown',
+        ...mainMenuKb()
+      }
+    )
   } catch {
     await ctx.reply(caption, { parse_mode: 'Markdown', ...mainMenuKb() })
   }
