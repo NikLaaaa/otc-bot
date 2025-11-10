@@ -7,27 +7,25 @@ export default async (ctx) => {
   if (!token) return ctx.reply('Откройте меню: /start')
 
   await db.read()
-  const deal = Object.values(db.data.deals || {}).find(d => d.token === token)
+
+  const deal = Object.values(db.data.deals).find(d => d.token === token)
   if (!deal) return ctx.reply('Сделка не найдена.')
 
-  const tags = (deal.tags || []).map(t => `#${t}`).join(' ')
-  const text = [
-    `🧾 *Описание:* ${deal.summary}`,
-    `💰 *Сумма:* ${deal.amount} ${deal.currency}`,
-    deal.nftLinks?.length ? '🧧 *NFT ссылки:*\n' + deal.nftLinks.map(x => `• ${x}`).join('\n') : '',
-    deal.currency === 'TON' ? `💼 *TON-кошелёк:* ${deal.tonWallet}` : '',
-    deal.currency === 'RUB' ? `💳 *Оплата RUB:* ${deal.rubDetails}` : '',
-    deal.currency === 'UAH' ? `💳 *Карта UAH:* ${deal.uahCard}` : '',
-    `🔖 *Код сделки:* ${deal.code}`,
-    tags ? `🏷 ${tags}` : ''
-  ].filter(Boolean).join('\n')
+  const text = 
+`🧾 *Описание:* ${deal.summary}
+💰 *Сумма:* ${deal.amount} ${deal.currency}
+🔖 *Код сделки:* ${deal.code}
+
+🧧 NFT:
+${deal.nftLinks.map(n => '• ' + n).join('\n')}
+
+🏷 ${deal.tags.map(t => '#' + t).join(' ')}`
 
   try {
-    await ctx.replyWithPhoto(Input.fromLocalFile('assets/logo.png'), {
-      caption: text,
-      parse_mode: 'Markdown',
-      ...dealActionsKb(deal.token)
-    })
+    await ctx.replyWithPhoto(
+      Input.fromLocalFile('assets/logo.png'),
+      { caption: text, parse_mode: 'Markdown', ...dealActionsKb(deal.token) }
+    )
   } catch {
     await ctx.reply(text, { parse_mode: 'Markdown', ...dealActionsKb(deal.token) })
   }
