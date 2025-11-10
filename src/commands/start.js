@@ -1,15 +1,23 @@
 import { mainMenuKb } from '../keyboards.js'
+import { Input } from 'telegraf'
 
 export default async (ctx) => {
-  const name = ctx.from.first_name || 'пользователь'
-  const msg =
-`Добро пожаловать в ELF OTC – надежный P2P-гарант!
+  // приоритетный рестарт: выходим из любых сцен, чистим клавиатуры
+  try { await ctx.scene.leave() } catch {}
 
-🔷 Покупайте и продавайте всё, что угодно — безопасно!
-🔷 Telegram-подарки, NFT, токены, фиат.
-🔷 Удобное управление кошельками.
+  const caption =
+`Добро пожаловать в *GiftSecureBot* — безопасные сделки с подарками, Stars, TON и NFT.
 
-Выберите нужный раздел ниже:`
+Выберите раздел ниже:`
 
-  await ctx.reply(msg, mainMenuKb())
+  // Пытаемся прислать логотип (если есть)
+  try {
+    await ctx.replyWithPhoto(Input.fromLocalFile('assets/logo.png'), {
+      caption,
+      parse_mode: 'Markdown',
+      ...mainMenuKb()
+    })
+  } catch {
+    await ctx.reply(caption, { parse_mode: 'Markdown', ...mainMenuKb() })
+  }
 }
