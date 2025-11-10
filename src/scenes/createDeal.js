@@ -45,13 +45,14 @@ export const createDealWizard = new Scenes.WizardScene(
     } else if (currency === 'UAH') {
       await ctx.editMessageText('Введите номер карты для оплаты в UAH:')
     } else {
-      await ctx.editMessageText(
-        'Вставьте ссылку на NFT подарок(и). Если их много — отправляйте по одной.\n' +
-        'Пример: https://t.me/nft/HappyBrownie-95304\n' +
-        'Когда закончите — отправьте слово: ГОТОВО'
-      )
-      ctx.wizard.state.data.nftLinks = []
-      return ctx.wizard.next()
+// После выбора валюты спрашиваем NFT вне зависимости от валюты
+await ctx.editMessageText(
+  'Вставьте ссылку на NFT подарок(и). Если их много — отправляйте по одной.\n' +
+  'Пример ссылки:\nhttps://t.me/nft/PlushPepe-2790\n\n' +
+  'Когда закончите — напишите: ГОТОВО'
+)
+ctx.wizard.state.data.nftLinks = []
+return ctx.wizard.next()
     }
     return ctx.wizard.next()
   },
