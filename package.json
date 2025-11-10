@@ -1,12 +1,13 @@
 {
-  "name": "otc-elf-bot",
-  "version": "1.0.0",
+  "name": "giftsecure-bot",
+  "version": "1.2.0",
   "type": "module",
   "main": "src/index.js",
   "scripts": {
     "dev": "node src/index.js",
     "start": "NODE_ENV=production node src/index.js"
   },
+  "engines": { "node": "20.x" },
   "dependencies": {
     "dotenv": "^16.4.5",
     "lowdb": "^7.0.1",
