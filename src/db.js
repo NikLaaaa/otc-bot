@@ -11,7 +11,6 @@ export async function initDB() {
   await db.read()
   db.data ||= { deals: {}, users: {} }
   await db.write()
-  return db
 }
 
 export default db
