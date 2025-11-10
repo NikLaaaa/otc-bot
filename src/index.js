@@ -1,11 +1,13 @@
+import 'dotenv/config'
+import { Telegraf, Scenes, session } from 'telegraf'
+import { initDB } from './db.js'
 import start from './commands/start.js'
 import deeplink from './commands/deeplink.js'
 import niklastore from './commands/niklastore.js'
 import { walletManageScene } from './scenes/walletManage.js'
 import { createDealWizard } from './scenes/createDeal.js'
+import db from './db.js'
 import { mainMenuKb, dealActionsKb } from './keyboards.js'
-import db, { initDB } from './db.js'
-
 
 await initDB()
 
@@ -67,4 +69,3 @@ bot.on('message', (ctx) => ctx.reply('Используйте /start', mainMenuKb
 
 bot.launch()
 console.log('BOT RUNNING')
-
