@@ -10,7 +10,7 @@ export default async (ctx) => {
   const deal = Object.values(db.data.deals || {}).find(d => d.token === token)
   if (!deal) return ctx.reply('Сделка не найдена.')
 
-  // Продавцу свою ссылку не показываем (игнор)
+  // Продавцу свою ссылку не показываем
   if (deal.sellerId === ctx.from.id) return
 
   const text =
@@ -23,7 +23,7 @@ ${(deal.nftLinks || []).map(n => '• ' + n).join('\n')}`
 
   try {
     await ctx.replyWithPhoto(
-      Input.fromLocalFile(process.cwd() + '/assets/logo.png'),
+      Input.fromLocalFile(process.cwd() + '/src/assets/logo.png'),
       { caption: text, parse_mode: 'Markdown', ...dealActionsKb(deal.token) }
     )
   } catch {
