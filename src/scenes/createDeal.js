@@ -1,91 +1,98 @@
-import { Scenes } from 'telegraf'
+import { Scenes, Markup } from 'telegraf'
 import db from '../db.js'
-import { nanoid, customAlphabet } from 'nanoid'
-import { currencyKb } from '../keyboards.js'
-
-const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-const dealCode = customAlphabet(alphabet, 5)
+import crypto from 'crypto'
+import { dealCreateKb } from '../keyboards.js'
 
 export const createDealWizard = new Scenes.WizardScene(
   'create-deal',
 
-  // Шаг 0: выбор валюты
+  // Шаг 0 — выбор валюты
   async (ctx) => {
-    await ctx.reply('Выберите валюту сделки:', currencyKb())
-    ctx.wizard.state.data = { sellerId: ctx.from.id }
-    return ctx.wizard.next()
-  },
-
-  // Шаг 1: всегда просим NFT ссылки (после валюты)
-  async (ctx) => {
-    if (!ctx.callbackQuery?.data?.startsWith('cur:')) {
-      try { await ctx.deleteMessage() } catch {}
-      await ctx.reply('Нажмите кнопку валюты ниже.', currencyKb())
-      return
-    }
-
-    const currency = ctx.callbackQuery.data.split(':')[1]
-    ctx.wizard.state.data.currency = currency
-    try { await ctx.deleteMessage() } catch {}
+    ctx.wizard.state.data = {}
 
     await ctx.reply(
-      'Вставьте ссылку на NFT подарок(и). Если их много — отправляйте по одной.\n\n' +
-      'Пример:\nhttps://t.me/nft/PlushPepe-2790\n\n' +
-      'Когда закончите — напишите: ГОТОВО'
+      'Выберите валюту сделки:',
+      Markup.inlineKeyboard([
+        [Markup.button.callback('⭐ Stars', 'cur:STARS')],
+        [Markup.button.callback('Ⓣ TON', 'cur:TON')],
+        [Markup.button.callback('₽ RUB', 'cur:RUB')],
+        [Markup.button.callback('₴ UAH', 'cur:UAH')]
+      ])
     )
-    ctx.wizard.state.data.nftLinks = []
     return ctx.wizard.next()
   },
 
-  // Шаг 2: сбор NFT ссылок
+  // Шаг 1 — обработка кнопок
   async (ctx) => {
-    const txt = (ctx.message?.text || '').trim()
-    if (!txt) return
-
-    if (txt.toLowerCase() === 'готово') {
-      await ctx.reply('Введите сумму сделки (число):')
-      return ctx.wizard.next()
+    if (ctx.callbackQuery) {
+      try { await ctx.answerCbQuery() } catch {}
     }
 
-    ctx.wizard.state.data.nftLinks.push(txt)
-    await ctx.reply('✅ Принято! Ещё ссылку или напишите ГОТОВО.')
+    const act = ctx.callbackQuery?.data
+    if (!act) return
+
+    if (!act.startsWith('cur:')) return
+
+    const currency = act.split(':')[1]
+    ctx.wizard.state.data.currency = currency
+
+    await ctx.reply('Отправьте ссылку на NFT (пример: https://t.me/nft/PlushPepe-2790)')
+    return ctx.wizard.next()
   },
 
-  // Шаг 3: сумма
+  // Шаг 2 — ссылка NFT
+  async (ctx) => {
+    const msg = (ctx.message?.text || '').trim()
+
+    if (!msg.startsWith('http')) {
+      return ctx.reply('Отправьте корректную ссылку на NFT.')
+    }
+
+    ctx.wizard.state.data.link = msg
+
+    await ctx.reply('Введите сумму сделки:')
+    return ctx.wizard.next()
+  },
+
+  // Шаг 3 — ввод суммы
   async (ctx) => {
     const amount = Number((ctx.message?.text || '').replace(',', '.'))
+
     if (!isFinite(amount) || amount <= 0) {
-      return ctx.reply('Введите корректное число.')
+      return ctx.reply('Введите корректную сумму.')
     }
+
     ctx.wizard.state.data.amount = amount
-    await ctx.reply('Введите «суть сделки»:')
+
+    await ctx.reply('Введите описание сделки:')
     return ctx.wizard.next()
   },
 
-  // Шаг 4: финал — создаём сделку
+  // Шаг 4 — описание
   async (ctx) => {
-    const d = ctx.wizard.state.data
-    d.summary = (ctx.message?.text || '').trim()
-    d.id = nanoid(10)
-    d.code = dealCode()
-    d.token = nanoid(8)
-    d.status = 'created'
-    d.createdAt = Date.now()
+    const desc = ctx.message?.text || 'Без описания'
+
+    ctx.wizard.state.data.description = desc
+
+    const token = crypto.randomBytes(6).toString('hex')
 
     await db.read()
-    db.data.deals[d.id] = d
+    db.data.deals[token] = {
+      token,
+      sellerId: ctx.from.id,
+      currency: ctx.wizard.state.data.currency,
+      link: ctx.wizard.state.data.link,
+      amount: ctx.wizard.state.data.amount,
+      description: ctx.wizard.state.data.description,
+      status: 'open'
+    }
     await db.write()
 
-    const me = await ctx.telegram.getMe()
-    const link = `https://t.me/${me.username}?start=${d.token}`
+    const url = `https://t.me/${process.env.BOT_USERNAME}?start=${token}`
 
     await ctx.reply(
-      `✅ Сделка создана!\n\n` +
-      `🔖 Код: ${d.code}\n` +
-      `💰 Сумма: ${d.amount} ${d.currency}\n` +
-      `📜 Описание: ${d.summary}\n\n` +
-      `🎁 NFT:\n${(d.nftLinks || []).join('\n')}\n\n` +
-      `🔗 Ссылка для покупателя:\n${link}`
+      `✅ Сделка создана!\n\nСсылка для покупателя:\n${url}`,
+      dealCreateKb()
     )
 
     return ctx.scene.leave()
