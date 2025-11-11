@@ -1,6 +1,6 @@
 import { Markup } from 'telegraf'
 
-// Главное меню
+// Главное меню (без «Отзывы»)
 export const mainMenuKb = () =>
   Markup.inlineKeyboard(
     [
@@ -8,13 +8,11 @@ export const mainMenuKb = () =>
       [Markup.button.callback('👛 Кошельки', 'wallet:manage')],
       [Markup.button.callback('💸 Вывод средств', 'w:WITHDRAW')],
       [Markup.button.callback('❓ Как это работает', 'help:how')],
-      [Markup.button.url('💬 Отзывы', 'https://t.me/GiftSecureBotReviews')],
       [Markup.button.url('📞 Поддержка', 'https://t.me/YOUR_SUPPORT_TAG')]
     ],
     { columns: 1 }
   )
 
-// Выбор валюты сделки
 export const currencyKb = () =>
   Markup.inlineKeyboard(
     [
@@ -26,7 +24,7 @@ export const currencyKb = () =>
     { columns: 1 }
   )
 
-// Кнопки под карточкой сделки (классические pay/cancel — для покупателя)
+// Покупательские стандартные кнопки (если нужны)
 export const dealActionsKb = (token) =>
   Markup.inlineKeyboard(
     [
@@ -36,7 +34,6 @@ export const dealActionsKb = (token) =>
     { columns: 1 }
   )
 
-// Меню управления кошельками + вывод
 export const walletMenuKb = () =>
   Markup.inlineKeyboard(
     [
@@ -53,7 +50,7 @@ export const walletMenuKb = () =>
 export const backToWalletsKb = () =>
   Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'w:BACK')]])
 
-// Админ-меню (/niklastore)
+// Админ-меню
 export const adminMenuKb = () =>
   Markup.inlineKeyboard(
     [
@@ -65,25 +62,42 @@ export const adminMenuKb = () =>
     { columns: 1 }
   )
 
-// Новые клавиатуры для сценария «гарант-подарок»
+// Продавец: подарок → скрин → отмена
 export const sellerGiftKb = (token) =>
   Markup.inlineKeyboard(
     [
       [Markup.button.callback('✅ Подарок отправлен', `seller:gift_sent:${token}`)],
+      [Markup.button.callback('📸 Скриншот отправлен', `seller:shot_sent:${token}`)],
       [Markup.button.callback('❌ Отменить сделку', `seller:cancel:${token}`)]
     ],
     { columns: 1 }
   )
 
+// Покупатель: подтвердить получение подарка
 export const buyerGiftKb = (token) =>
   Markup.inlineKeyboard(
+    [[Markup.button.callback('✅ Подарок получен', `buyer:gift_received:${token}`)]],
+    { columns: 1 }
+  )
+
+// Вывод — простая воронка
+export const withdrawStartKb = () =>
+  Markup.inlineKeyboard(
+    [[Markup.button.callback('💸 Вывести', 'wd:GO')]],
+    { columns: 1 }
+  )
+
+export const withdrawWayKb = () =>
+  Markup.inlineKeyboard(
     [
-      [Markup.button.callback('✅ Подарок получен', `buyer:gift_received:${token}`)]
+      [Markup.button.callback('💰 Вывести весь мой баланс', 'wd:ALL')],
+      [Markup.button.callback('✍️ Ввести сумму вручную', 'wd:AMOUNT')],
+      [Markup.button.callback('⬅️ Назад', 'w:BACK')]
     ],
     { columns: 1 }
   )
 
-// Клавиатура после создания сделки (быстрые действия)
+// Клавиатура после создания сделки (не изм.)
 export const dealCreateKb = () =>
   Markup.inlineKeyboard(
     [
