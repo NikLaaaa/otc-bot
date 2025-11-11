@@ -5,43 +5,45 @@ import { walletMenuKb, backToWalletsKb } from '../keyboards.js'
 export const walletManageScene = new Scenes.WizardScene(
   'wallet-manage',
 
-  // Шаг 0: меню управления кошельками
+  // Шаг 0 — меню
   async (ctx) => {
-    try { await ctx.deleteMessage() } catch {}
-    await ctx.reply('Выберите действие:', walletMenuKb())
     ctx.wizard.state.data = {}
+
+    try { await ctx.deleteMessage() } catch {}
+
+    await ctx.reply('Выберите действие:', walletMenuKb())
     return ctx.wizard.next()
   },
 
-  // Шаг 1: все нажатия кнопок
+  // Шаг 1 — обработка кнопок
   async (ctx) => {
-    const act = ctx.callbackQuery?.data
-    if (!act) return ctx.reply('Нажмите кнопку ниже.', walletMenuKb())
-    await ctx.answerCbQuery()
-    try { await ctx.deleteMessage() } catch {}
+    // фикс бесконечной загрузки
+    if (ctx.callbackQuery) {
+      try { await ctx.answerCbQuery() } catch {}
+    }
 
-    // --------------------------
-    // ✅ ПОКАЗ ТЕКУЩИХ РЕКВИЗИТОВ
-    // --------------------------
+    const act = ctx.callbackQuery?.data
+
+    // удаление сообщения, если есть
+    try {
+      await ctx.telegram.deleteMessage(ctx.chat.id, ctx.callbackQuery.message.message_id)
+    } catch {}
+
+    if (!act) return ctx.reply('Нажмите кнопку ниже.', walletMenuKb())
+
+    // Показ кошельков
     if (act === 'w:SHOW') {
       await db.read()
       const w = db.data.users[ctx.from.id]?.wallets || {}
 
       await ctx.reply(
-        `Ваши реквизиты:\n\nTON: ${w.TON || '—'}\nRUB: ${w.RUB || '—'}\nUAH: ${w.UAH || '—'}`,
+        `Ваши реквизиты:\n\nⓉ TON: ${w.TON || '—'}\n₽ RUB: ${w.RUB || '—'}\n₴ UAH: ${w.UAH || '—'}`,
         walletMenuKb()
       )
       return
     }
 
-    // --------------------------
-    // ✅ ЗАВЕРШИТЬ
-    // --------------------------
-    if (act === 'w:DONE') return ctx.scene.leave()
-
-    // --------------------------
-    // ✅ НАЧАЛО ВЫВОДА СРЕДСТВ
-    // --------------------------
+    // Вывод средств — выбор валюты
     if (act === 'w:WITHDRAW') {
       await db.read()
       const w = db.data.users[ctx.from.id]?.wallets || {}
@@ -58,48 +60,42 @@ export const walletManageScene = new Scenes.WizardScene(
           [Markup.button.callback('₽ RUB', 'wd-cur:RUB')],
           [Markup.button.callback('₴ UAH', 'wd-cur:UAH')],
           [Markup.button.callback('⬅️ Назад', 'w:BACK')]
-        ], { columns: 1 })
+        ])
       )
       return
     }
 
-    // --------------------------
-    // ✅ ВЫБОР ВАЛЮТЫ ВЫВОДА
-    // --------------------------
+    // Выбрали валюту → кнопка "Создать заявку"
     if (act.startsWith('wd-cur:')) {
       const currency = act.split(':')[1]
       ctx.wizard.state.data.withdrawCurrency = currency
 
       await ctx.reply(
-        `📤 Вывод в *${currency}*\n\nНажмите кнопку, чтобы создать заявку.`,
+        `📤 Вывод в *${currency}*\n\nНажмите кнопку ниже.`,
         {
           parse_mode: 'Markdown',
           ...Markup.inlineKeyboard([
             [Markup.button.callback('📝 Создать заявку на выплату', 'wd-create')],
-            [Markup.button.callback('⬅️ Назад', 'w:BACK')]
-          ], { columns: 1 })
+            [Markup.button.callback('⬅️ Назад', 'w:BACK')],
+          ])
         }
       )
       return
     }
 
-    // --------------------------
-    // ✅ СОЗДАНИЕ ЗАЯВКИ — СПРОСИТЬ СУММУ
-    // --------------------------
+    // Нажали "создать заявку"
     if (act === 'wd-create') {
       await ctx.reply('Введите сумму для вывода:')
       ctx.wizard.state.data.awaitWithdrawAmount = true
       return
     }
 
-    // --------------------------
-    // ✅ ДОБАВЛЕНИЕ/ИЗМЕНЕНИЕ КОШЕЛЬКОВ
-    // --------------------------
+    // Добавление/изменение кошельков
     if (['w:TON', 'w:RUB', 'w:UAH'].includes(act)) {
       const cur = act.replace('w:', '')
 
       await ctx.reply(
-        `Отправьте ${cur} одной строкой.\n\nПримеры:\nTON: UQxxxx...ton\nRUB: 2200 xxxx xxxx xxxx\nUAH: 5375 xxxx xxxx xxxx`,
+        `Отправьте ${cur} одной строкой.`,
         backToWalletsKb()
       )
 
@@ -107,23 +103,21 @@ export const walletManageScene = new Scenes.WizardScene(
       return ctx.wizard.next()
     }
 
-    // --------------------------
-    // ✅ НАЗАД
-    // --------------------------
     if (act === 'w:BACK') {
       await ctx.reply('Выберите действие:', walletMenuKb())
       return
     }
 
-    // anything else
+    if (act === 'w:DONE') {
+      return ctx.scene.leave()
+    }
+
     await ctx.reply('Выберите действие:', walletMenuKb())
   },
 
-  // --------------------------
-  // ✅ ШАГ 2 — обработка суммы вывода или сохранения кошелька
-  // --------------------------
+  // Шаг 2 — ввод суммы или реквизитов
   async (ctx) => {
-    // ✅ обработка суммы вывода
+    // Обработка суммы вывода
     if (ctx.wizard.state.data.awaitWithdrawAmount) {
       const amount = Number((ctx.message?.text || '').replace(',', '.'))
 
@@ -144,23 +138,20 @@ export const walletManageScene = new Scenes.WizardScene(
       return
     }
 
-    // ✅ обработка сохранения кошелька
+    // Обработка сохранения кошелька
     const mode = ctx.wizard.state.data.mode
     const raw = (ctx.message?.text || '').trim()
 
     if (!mode || !raw) {
-      await ctx.reply('Нужно прислать реквизит одной строкой.', walletMenuKb())
+      await ctx.reply('Введите реквизит одной строкой.', walletMenuKb())
       ctx.wizard.selectStep(0)
       return
     }
 
-    const m = raw.match(/^(TON|RUB|UAH)\s*:\s*(.+)$/i)
-    const value = m ? m[2].trim() : raw
-
     await db.read()
     db.data.users[ctx.from.id] ||= { id: ctx.from.id }
     db.data.users[ctx.from.id].wallets ||= {}
-    db.data.users[ctx.from.id].wallets[mode] = value
+    db.data.users[ctx.from.id].wallets[mode] = raw
     await db.write()
 
     await ctx.reply(`✅ ${mode} сохранён.`, walletMenuKb())
