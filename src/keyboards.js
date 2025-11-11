@@ -13,6 +13,7 @@ export const mainMenuKb = () =>
     { columns: 1 }
   )
 
+// Выбор валюты сделки
 export const currencyKb = () =>
   Markup.inlineKeyboard(
     [
@@ -24,16 +25,7 @@ export const currencyKb = () =>
     { columns: 1 }
   )
 
-// Покупательские стандартные кнопки (если нужны)
-export const dealActionsKb = (token) =>
-  Markup.inlineKeyboard(
-    [
-      [Markup.button.callback('✅ Оплатить', `pay:${token}`)],
-      [Markup.button.callback('❌ Отменить', `cancel:${token}`)]
-    ],
-    { columns: 1 }
-  )
-
+// Меню кошельков
 export const walletMenuKb = () =>
   Markup.inlineKeyboard(
     [
@@ -50,60 +42,39 @@ export const walletMenuKb = () =>
 export const backToWalletsKb = () =>
   Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'w:BACK')]])
 
-// Админ-меню
-export const adminMenuKb = () =>
+// При создании сделки (ожидание покупателя): только отмена
+export const sellerAwaitBuyerKb = (token) =>
   Markup.inlineKeyboard(
-    [
-      [Markup.button.callback('🏆 Поставить успешные сделки', 'admin:success')],
-      [Markup.button.callback('💳 Пометить оплату по коду', 'admin:markpaid')],
-      [Markup.button.callback('📋 Список открытых сделок', 'admin:list')],
-      [Markup.button.callback('⬅️ В меню', 'admin:back')]
-    ],
+    [[Markup.button.callback('❌ Отменить сделку', `seller:cancel:${token}`)]],
     { columns: 1 }
   )
 
-// Продавец: подарок → скрин → отмена
-export const sellerGiftKb = (token) =>
+// После присоединения покупателя: продавцу — подарок/отмена
+export const sellerGiftStep1Kb = (token) =>
   Markup.inlineKeyboard(
     [
-      [Markup.button.callback('✅ Подарок отправлен', `seller:gift_sent:${token}`)],
-      [Markup.button.callback('📸 Скриншот отправлен', `seller:shot_sent:${token}`)],
+      [Markup.button.callback('🎁 Подарок отправлен', `seller:gift_sent:${token}`)],
       [Markup.button.callback('❌ Отменить сделку', `seller:cancel:${token}`)]
     ],
     { columns: 1 }
   )
 
-// Покупатель: подтвердить получение подарка
-export const buyerGiftKb = (token) =>
-  Markup.inlineKeyboard(
-    [[Markup.button.callback('✅ Подарок получен', `buyer:gift_received:${token}`)]],
-    { columns: 1 }
-  )
-
-// Вывод — простая воронка
-export const withdrawStartKb = () =>
-  Markup.inlineKeyboard(
-    [[Markup.button.callback('💸 Вывести', 'wd:GO')]],
-    { columns: 1 }
-  )
-
-export const withdrawWayKb = () =>
+// Подтверждение, что точно передал подарок
+export const sellerGiftConfirmKb = (token) =>
   Markup.inlineKeyboard(
     [
-      [Markup.button.callback('💰 Вывести весь мой баланс', 'wd:ALL')],
-      [Markup.button.callback('✍️ Ввести сумму вручную', 'wd:AMOUNT')],
-      [Markup.button.callback('⬅️ Назад', 'w:BACK')]
+      [Markup.button.callback('✅ Да, передал(а) подарок', `seller:gift_confirm:${token}`)],
+      [Markup.button.callback('❌ Отменить сделку', `seller:cancel:${token}`)]
     ],
     { columns: 1 }
   )
 
-// Клавиатура после создания сделки (не изм.)
-export const dealCreateKb = () =>
+// Шаг «пришлите скриншот передачи» → после — кнопка «скрин отправлен»
+export const sellerShotSentKb = (token) =>
   Markup.inlineKeyboard(
     [
-      [Markup.button.callback('🧾 Создать ещё', 'deal:create')],
-      [Markup.button.callback('👛 Кошельки', 'wallet:manage')],
-      [Markup.button.callback('⬇️ Вывод средств', 'w:WITHDRAW')]
+      [Markup.button.callback('📸 Отправил(а) скриншот', `seller:shot_sent:${token}`)],
+      [Markup.button.callback('❌ Отменить сделку', `seller:cancel:${token}`)]
     ],
     { columns: 1 }
   )
