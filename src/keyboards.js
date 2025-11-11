@@ -8,7 +8,7 @@ export const mainMenuKb = () =>
       [Markup.button.callback('👛 Кошельки', 'wallet:manage')],
       [Markup.button.callback('💸 Вывод средств', 'w:WITHDRAW')],
       [Markup.button.callback('❓ Как это работает', 'help:how')],
-      [Markup.button.url('📞 Поддержка', 'https://t.me/GiftSecureSupport')]
+      [Markup.button.url('📞 Поддержка', 'https://t.me/YOUR_SUPPORT_TAG')]
     ],
     { columns: 1 }
   )
@@ -25,14 +25,32 @@ export const currencyKb = () =>
     { columns: 1 }
   )
 
-// При создании сделки (ожидание покупателя): только отмена
+// ===== Кошельки =====
+export const walletMenuKb = () =>
+  Markup.inlineKeyboard(
+    [
+      [Markup.button.callback('Ⓣ TON', 'w:TON')],
+      [Markup.button.callback('₽ RUB', 'w:RUB')],
+      [Markup.button.callback('₴ UAH', 'w:UAH')],
+      [Markup.button.callback('⬇️ Вывод средств', 'w:WITHDRAW')],
+      [Markup.button.callback('👀 Показать текущие', 'w:SHOW')],
+      [Markup.button.callback('✅ Готово', 'w:DONE')]
+    ],
+    { columns: 1 }
+  )
+
+// 🔧 ДОБАВЛЕН ЭТОТ ЭКСПОРТ (его не хватало)
+export const backToWalletsKb = () =>
+  Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'w:BACK')]])
+
+// ===== Сделка: ожидание покупателя (только отмена) =====
 export const sellerAwaitBuyerKb = (token) =>
   Markup.inlineKeyboard(
     [[Markup.button.callback('❌ Отменить сделку', `seller:cancel:${token}`)]],
     { columns: 1 }
   )
 
-// После присоединения покупателя: продавцу — подарок/отмена
+// После присоединения покупателя: подарок/отмена
 export const sellerGiftStep1Kb = (token) =>
   Markup.inlineKeyboard(
     [
@@ -52,7 +70,7 @@ export const sellerGiftConfirmKb = (token) =>
     { columns: 1 }
   )
 
-// Шаг «пришлите скриншот передачи» → после — кнопка «скрин отправлен»
+// Скриншот отправлен
 export const sellerShotSentKb = (token) =>
   Markup.inlineKeyboard(
     [
