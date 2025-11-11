@@ -35,8 +35,21 @@ bot.start(async (ctx) => {
 bot.command('niklastore', niklastore)
 bot.command('finish', finish)
 
-bot.action('wallet:manage', (ctx) => ctx.scene.enter('wallet-manage'))
-bot.action('deal:create', (ctx) => ctx.scene.enter('create-deal'))
+import { lastStartMessageId } from './commands/start.js'  // ✅ добавить импорт
+
+bot.action('deal:create', async (ctx) => {
+  if (lastStartMessageId) {
+    try { await ctx.telegram.deleteMessage(ctx.chat.id, lastStartMessageId) } catch {}
+  }
+  return ctx.scene.enter('create-deal')
+})
+
+bot.action('wallet:manage', async (ctx) => {
+  if (lastStartMessageId) {
+    try { await ctx.telegram.deleteMessage(ctx.chat.id, lastStartMessageId) } catch {}
+  }
+  return ctx.scene.enter('wallet-manage')
+})
 
 // Оплата: продавец не может оплатить свою же сделку; защита от повторов
 bot.action(/pay:(.+)/, async (ctx) => {
