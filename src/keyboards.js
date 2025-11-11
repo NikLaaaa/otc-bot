@@ -7,7 +7,7 @@ export const mainMenuKb = () =>
       [Markup.button.callback('🧾 Создать сделку', 'deal:create')],
       [Markup.button.callback('👛 Кошельки', 'wallet:manage')],
       [Markup.button.callback('🌐 Язык', 'lang:menu')],
-      [Markup.button.url('📞 Поддержка', 'https://t.me/YOUR_SUPPORT_TAG')]
+      [Markup.button.url('📞 Поддержка', 'https://t.me/GiftSecureSupport')]
     ],
     { columns: 1 }
   )
