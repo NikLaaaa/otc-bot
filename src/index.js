@@ -7,7 +7,6 @@ import { walletManageScene } from './scenes/walletManage.js'
 import { createDealWizard } from './scenes/createDeal.js'
 import {
   mainMenuKb,
-  sellerGiftStep1Kb,
   sellerGiftConfirmKb,
   sellerShotSentKb
 } from './keyboards.js'
@@ -38,9 +37,12 @@ if (!BOT_USERNAME) {
 console.log('Bot username:', BOT_USERNAME)
 
 /* ===================== /START ========================= */
-// Не сбрасываем сцену создания сделки; диплинк только при валидном payload
+// не сбрасываем сцену создания сделки; диплинк только при валидном payload
 bot.start(async (ctx) => {
-  if (ctx.scene?.current?.id === 'create-deal') return
+  if (ctx.scene?.current?.id === 'create-deal' || ctx.scene?.current?.id === 'wallet-manage') {
+    // если внутри сцен — пусть сцена сама отработает /start (в walletManage он перехвачен)
+    return
+  }
   try { await ctx.scene.leave() } catch {}
 
   if (typeof ctx.startPayload === 'string' && ctx.startPayload.length > 5) {
@@ -66,7 +68,7 @@ bot.action('wallet:manage', async (ctx) => {
   return ctx.scene.enter('wallet-manage')
 })
 
-// ✅ глобальный обработчик «Вывод средств» из главного меню
+// глобальный обработчик «Вывод средств» из главного меню
 bot.action('w:WITHDRAW', async (ctx) => {
   await ctx.answerCbQuery()
   if (lastStartMessageId) {
@@ -92,7 +94,7 @@ bot.action('help:how', async (ctx) => {
 })
 
 /* =================== /niklastore ====================== */
-// Теперь только установка количества успешных сделок
+// теперь только установка количества успешных сделок
 bot.command('niklastore', async (ctx) => {
   await niklastore(ctx) // спрашивает число и ставит флаг ctx.session.adminAwaitSuccessCount = true
 })
