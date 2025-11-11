@@ -1,6 +1,6 @@
 import { Markup } from 'telegraf'
 
-// Главное меню (без «Отзывы»)
+// Главное меню
 export const mainMenuKb = () =>
   Markup.inlineKeyboard(
     [
@@ -24,23 +24,6 @@ export const currencyKb = () =>
     ],
     { columns: 1 }
   )
-
-// Меню кошельков
-export const walletMenuKb = () =>
-  Markup.inlineKeyboard(
-    [
-      [Markup.button.callback('Ⓣ TON', 'w:TON')],
-      [Markup.button.callback('₽ RUB', 'w:RUB')],
-      [Markup.button.callback('₴ UAH', 'w:UAH')],
-      [Markup.button.callback('⬇️ Вывод средств', 'w:WITHDRAW')],
-      [Markup.button.callback('👀 Показать текущие', 'w:SHOW')],
-      [Markup.button.callback('✅ Готово', 'w:DONE')]
-    ],
-    { columns: 1 }
-  )
-
-export const backToWalletsKb = () =>
-  Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'w:BACK')]])
 
 // При создании сделки (ожидание покупателя): только отмена
 export const sellerAwaitBuyerKb = (token) =>
