@@ -1,14 +1,14 @@
 import { Markup } from 'telegraf'
 
-// Главное меню (широкие кнопки)
+// Главное меню
 export const mainMenuKb = () =>
   Markup.inlineKeyboard(
     [
-      [Markup.button.callback('🧾 Создать сделку', 'deal:create')],
+      [Markup.button.callback('🔒 Создать сделку', 'deal:create')],
       [Markup.button.callback('👛 Кошельки', 'wallet:manage')],
-      [Markup.button.callback('⬇️ Вывод средств', 'wallet:manage')], // по твоей логике через меню кошельков
-      [Markup.button.callback('🌐 Язык', 'lang:menu')],
-      // поменяй на свой тег поддержки
+      [Markup.button.callback('💸 Вывод средств', 'w:WITHDRAW')],
+      [Markup.button.callback('❓ Как это работает', 'help:how')],
+      [Markup.button.url('💬 Отзывы', 'https://t.me/GiftSecureBotReviews')],
       [Markup.button.url('📞 Поддержка', 'https://t.me/YOUR_SUPPORT_TAG')]
     ],
     { columns: 1 }
@@ -26,7 +26,7 @@ export const currencyKb = () =>
     { columns: 1 }
   )
 
-// Кнопки под карточкой сделки
+// Кнопки под карточкой сделки (покупателю)
 export const dealActionsKb = (token) =>
   Markup.inlineKeyboard(
     [
@@ -36,7 +36,7 @@ export const dealActionsKb = (token) =>
     { columns: 1 }
   )
 
-// Меню управления кошельками + вывод
+// Меню кошельков
 export const walletMenuKb = () =>
   Markup.inlineKeyboard(
     [
@@ -53,14 +53,14 @@ export const walletMenuKb = () =>
 export const backToWalletsKb = () =>
   Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'w:BACK')]])
 
-// ✅ НОВОЕ: клавиатура, которую импортирует createDeal.js
-// Показываем, что можно сразу создать ещё сделку / перейти к кошелькам / к выводу
-export const dealCreateKb = () =>
+// Админ-меню (/niklastore)
+export const adminMenuKb = () =>
   Markup.inlineKeyboard(
     [
-      [Markup.button.callback('🧾 Создать ещё', 'deal:create')],
-      [Markup.button.callback('👛 Кошельки', 'wallet:manage')],
-      [Markup.button.callback('⬇️ Вывод средств', 'w:WITHDRAW')]
+      [Markup.button.callback('🏆 Поставить успешные сделки', 'admin:success')],
+      [Markup.button.callback('💳 Пометить оплату по коду', 'admin:markpaid')],
+      [Markup.button.callback('📋 Список открытых сделок', 'admin:list')],
+      [Markup.button.callback('⬅️ В меню', 'admin:back')]
     ],
     { columns: 1 }
   )
