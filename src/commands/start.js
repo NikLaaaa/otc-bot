@@ -7,21 +7,24 @@ export default async (ctx) => {
   const caption = 
 `🎁 *GiftSecureBot*
 
-Добро пожаловать!
-Создавайте безопасные сделки с NFT, Stars, TON, RUB и UAH.
+Безопасные сделки с NFT, Stars, TON, RUB и UAH.
 
 Выберите действие:`  
 
   try {
     await ctx.replyWithPhoto(
-      Input.fromLocalFile('assets/logo.png'),
+      Input.fromLocalFile('assets/logo.png'), // ✅ наш логотип
       {
         caption,
         parse_mode: 'Markdown',
         ...mainMenuKb()
       }
     )
-  } catch {
-    await ctx.reply(caption, { parse_mode: 'Markdown', ...mainMenuKb() })
+  } catch (err) {
+    console.log('LOGO SEND ERROR:', err)
+    await ctx.reply(caption, {
+      parse_mode: 'Markdown',
+      ...mainMenuKb()
+    })
   }
 }
