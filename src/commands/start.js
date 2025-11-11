@@ -6,7 +6,6 @@ let lastStartMessageId = null
 export default async (ctx) => {
   try { await ctx.scene.leave() } catch {}
 
-  // чистим прошлый старт
   if (lastStartMessageId) {
     try { await ctx.telegram.deleteMessage(ctx.chat.id, lastStartMessageId) } catch {}
   }
