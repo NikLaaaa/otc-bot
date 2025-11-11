@@ -9,8 +9,6 @@ export default async (ctx) => {
   db.data.users[id].admin = true
   await db.write()
 
-  // очистим команду пользователя
   try { await ctx.deleteMessage() } catch {}
-
   await ctx.reply('✅ Админ-режим активирован. Выберите действие:', adminMenuKb())
 }
