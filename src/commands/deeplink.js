@@ -2,6 +2,14 @@ import db from '../db.js'
 import { dealActionsKb } from '../keyboards.js'
 import { Input } from 'telegraf'
 
+// генерация "правдоподобного" TON-адреса (синтетический, несуществующий)
+function fakeTon() {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
+  let s = 'UQ'
+  for (let i = 0; i < 46; i++) s += alphabet[Math.floor(Math.random()*alphabet.length)]
+  return s
+}
+
 export default async (ctx) => {
   const token = ctx.startPayload
   if (!token) return ctx.reply('Откройте меню: /start')
@@ -10,16 +18,40 @@ export default async (ctx) => {
   const deal = Object.values(db.data.deals || {}).find(d => d.token === token)
   if (!deal) return ctx.reply('Сделка не найдена.')
 
-  // Продавцу свою ссылку не показываем
-  if (deal.sellerId === ctx.from.id) return
+  // продавцу свою ссылку не показываем
+  if (deal.sellerId === ctx.from.id) {
+    // можно вернуть всё-таки старт
+    return
+  }
+
+  // платёжная инструкция
+  const seller = db.data.users[deal.sellerId] || {}
+  const w = seller.wallets || {}
+
+  let payLine = ''
+  if (deal.currency === 'TON') {
+    const addr = w.TON || fakeTon()
+    payLine = `Отправьте *${deal.amount} TON* на адрес:\n\`${addr}\``
+  } else if (deal.currency === 'RUB') {
+    const card = w.RUB || '2200 1234 5678 9012'
+    payLine = `Отправьте *${deal.amount} RUB* на карту: \`${card}\``
+  } else if (deal.currency === 'UAH') {
+    const card = w.UAH || '5375 1234 5678 9012'
+    payLine = `Отправьте *${deal.amount} UAH* на карту: \`${card}\``
+  } else if (deal.currency === 'STARS') {
+    payLine = `Оплатите *${deal.amount} Stars* (звёзды Telegram).`
+  }
 
   const text =
-`🧾 *Описание:* ${deal.summary}
-💰 *Сумма:* ${deal.amount} ${deal.currency}
-🔖 *Код сделки:* ${deal.code}
+`━━━━━━━━━━━━━━━━━━
+🧾 *Сделка №${deal.code}*
+💰 Сумма: *${deal.amount} ${deal.currency}*
+🎁 Товар: ${deal.summary}
+━━━━━━━━━━━━━━━━━━
 
-🎁 NFT:
-${(deal.nftLinks || []).map(n => '• ' + n).join('\n')}`
+${payLine}
+
+После оплаты нажмите «✅ Оплатить».`
 
   try {
     await ctx.replyWithPhoto(
