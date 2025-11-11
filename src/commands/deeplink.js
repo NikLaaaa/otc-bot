@@ -7,19 +7,25 @@ export default async (ctx) => {
   if (!token) return ctx.reply('Откройте меню: /start')
 
   await db.read()
-
-  const deal = Object.values(db.data.deals).find(d => d.token === token)
+  const deal = Object.values(db.data.deals || {}).find(d => d.token === token)
   if (!deal) return ctx.reply('Сделка не найдена.')
 
-  const text = 
+  // 🚫 если продавец сам перешёл по своей ссылке — ничего не показываем (игнорируем)
+  if (deal.sellerId === ctx.from.id) {
+    // если хочешь — можно отправлять подсказку:
+    // return ctx.reply('Это ваша ссылка для покупателя. Отправьте её покупателю.')
+    return
+  }
+
+  const text =
 `🧾 *Описание:* ${deal.summary}
 💰 *Сумма:* ${deal.amount} ${deal.currency}
 🔖 *Код сделки:* ${deal.code}
 
 🧧 NFT:
-${deal.nftLinks.map(n => '• ' + n).join('\n')}
+${(deal.nftLinks || []).map(n => '• ' + n).join('\n')}
 
-🏷 ${deal.tags.map(t => '#' + t).join(' ')}`
+🏷 ${(deal.tags || []).map(t => '#' + t).join(' ')}`
 
   try {
     await ctx.replyWithPhoto(
