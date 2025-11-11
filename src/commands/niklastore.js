@@ -1,5 +1,5 @@
 import db from '../db.js'
-import { adminMenuKb } from '../keyboards.js'
+import { mainMenuKb } from '../keyboards.js'
 
 export default async (ctx) => {
   await db.read()
@@ -10,5 +10,5 @@ export default async (ctx) => {
   await db.write()
 
   try { await ctx.deleteMessage() } catch {}
-  await ctx.reply('✅ Админ-режим активирован. Выберите действие:', adminMenuKb())
+  await ctx.reply('✅ Админ-режим активирован.', mainMenuKb())
 }
