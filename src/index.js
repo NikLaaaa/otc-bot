@@ -66,6 +66,16 @@ bot.action('wallet:manage', async (ctx) => {
   return ctx.scene.enter('wallet-manage')
 })
 
+// ✅ глобальный обработчик «Вывод средств» из главного меню
+bot.action('w:WITHDRAW', async (ctx) => {
+  await ctx.answerCbQuery()
+  if (lastStartMessageId) {
+    try { await ctx.telegram.deleteMessage(ctx.chat.id, lastStartMessageId) } catch {}
+  }
+  ctx.session.goWithdraw = true
+  return ctx.scene.enter('wallet-manage')
+})
+
 bot.action('help:how', async (ctx) => {
   await ctx.answerCbQuery()
   try { await ctx.telegram.deleteMessage(ctx.chat.id, ctx.callbackQuery.message.message_id) } catch {}
