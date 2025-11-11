@@ -13,7 +13,7 @@ import finish from './commands/finish.js'
 import { walletManageScene } from './scenes/walletManage.js'
 import { createDealWizard } from './scenes/createDeal.js'
 
-// клавиатура
+// клавиатуры
 import { mainMenuKb } from './keyboards.js'
 
 await initDB()
@@ -23,7 +23,7 @@ const stage = new Scenes.Stage([walletManageScene, createDealWizard])
 bot.use(session())
 bot.use(stage.middleware())
 
-// /start: если есть payload → deeplink, иначе меню; выходим из сцен
+// /start: если payload → диплинк, иначе меню (с логотипом)
 bot.start(async (ctx) => {
   try { await ctx.scene.leave() } catch {}
   if (ctx.startPayload && ctx.startPayload.trim().length > 0) {
@@ -38,33 +38,25 @@ bot.command('finish', finish)
 bot.action('wallet:manage', (ctx) => ctx.scene.enter('wallet-manage'))
 bot.action('deal:create', (ctx) => ctx.scene.enter('create-deal'))
 
-// 🚫 оплата: продавец не может оплатить свою сделку
+// Оплата: продавец не может оплатить свою же сделку; защита от повторов
 bot.action(/pay:(.+)/, async (ctx) => {
   const token = ctx.match[1]
   await db.read()
   const deal = Object.values(db.data.deals).find(d => d.token === token)
   if (!deal) return ctx.answerCbQuery('Сделка не найдена.', { show_alert: true })
-
-  // запрет продавцу оплачивать свою же сделку
   if (deal.sellerId === ctx.from.id) {
     return ctx.answerCbQuery('Нельзя оплатить свою же сделку.', { show_alert: true })
   }
-
-  // защита от повторной оплаты
   if (deal.status === 'paid') {
     return ctx.answerCbQuery('Уже оплачено.', { show_alert: true })
   }
-
   deal.status = 'paid'
   deal.buyerId = ctx.from.id
   await db.write()
 
   await ctx.answerCbQuery('✅ Оплачено!')
   try {
-    await ctx.telegram.sendMessage(
-      deal.sellerId,
-      `✅ Покупатель оплатил сделку ${deal.code}. Передайте товар.`
-    )
+    await ctx.telegram.sendMessage(deal.sellerId, `✅ Покупатель оплатил сделку ${deal.code}. Передайте товар.`)
   } catch {}
 })
 
@@ -74,15 +66,15 @@ bot.action(/cancel:(.+)/, async (ctx) => {
   const deal = Object.values(db.data.deals).find(d => d.token === token)
   if (!deal) return ctx.reply('Сделка не найдена.')
   if (deal.status === 'paid') return ctx.reply('❌ Уже оплачено — отмена невозможна.')
-
   deal.status = 'canceled'
   await db.write()
   await ctx.reply('❌ Сделка отменена.')
 })
 
+// Фолбэк
 bot.on('message', (ctx) => ctx.reply('Меню: /start', mainMenuKb()))
 
-// важно для polling
+// Поллинг: снять вебхук и запустить
 await bot.telegram.deleteWebhook({ drop_pending_updates: true }).catch(() => {})
 bot.launch()
 console.log('GiftSecureBot RUNNING ✅')
