@@ -1,16 +1,34 @@
-// Универсальный рендерер «одного сообщения»
-export async function showScreen(ctx, text, keyboard, extra = {}) {
-  // храним id экрана в сессии
-  const mid = ctx.session?.screenMsgId
-  const opts = { parse_mode: 'Markdown', ...extra, reply_markup: keyboard?.reply_markup }
+// ====== БРЕНД ======
+export const BRAND_NAME = 'GiftSecure'
+export const SUPPORT_LINK = 'https://t.me/GiftSecureSupport'
 
-  try {
-    if (mid) {
+// Текст «почему мы» (можешь править)
+export const HERO_TEXT = `🔒 Гарантия безопасности — все сделки защищены
+💎 Быстрые выплаты — в любой валюте
+🛡 Круглосуточная поддержка
+⚡️ Простой и понятный интерфейс`
+
+// ====== ОДИН ЭКРАН (вместо ui.js) ======
+/**
+ * Рендерит/обновляет один «экран» (одно сообщение) в чате.
+ * Хранит id в ctx.session.screenMsgId. Все ответы бота делай через showScreen.
+ */
+export async function showScreen(ctx, text, keyboard, extra = {}) {
+  const mid = ctx.session?.screenMsgId
+  const opts = {
+    parse_mode: 'Markdown',
+    ...extra,
+    reply_markup: keyboard?.reply_markup
+  }
+
+  // Пытаемся отредактировать существующий экран
+  if (mid) {
+    try {
       await ctx.telegram.editMessageText(ctx.chat.id, mid, undefined, text, opts)
       return mid
+    } catch (_) {
+      // если не получилось (старое/не моё) — пошлём новое
     }
-  } catch {
-    // если нельзя отредактировать (старое/не моё) — упадём в отправку нового
   }
 
   const sent = await ctx.telegram.sendMessage(ctx.chat.id, text, opts)
@@ -18,11 +36,11 @@ export async function showScreen(ctx, text, keyboard, extra = {}) {
   return sent.message_id
 }
 
-// Удобный хэлпер для action: редактировать текущий экран
+// Сахар для action-обработчиков
 export const render = (ctx) => async (text, keyboard, extra = {}) =>
   showScreen(ctx, text, keyboard, extra)
 
-// Сброс экрана (редко пригодится)
+// Полный сброс экрана (по желанию)
 export async function resetScreen(ctx) {
   if (ctx.session?.screenMsgId) {
     try { await ctx.telegram.deleteMessage(ctx.chat.id, ctx.session.screenMsgId) } catch {}
