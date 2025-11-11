@@ -4,27 +4,20 @@ import { Input } from 'telegraf'
 export default async (ctx) => {
   try { await ctx.scene.leave() } catch {}
 
-  const caption = 
+  const caption =
 `🎁 *GiftSecureBot*
 
 Безопасные сделки с NFT, Stars, TON, RUB и UAH.
 
-Выберите действие:`  
+Выберите действие:`
 
   try {
     await ctx.replyWithPhoto(
-      Input.fromLocalFile('assets/logo.png'), // ✅ наш логотип
-      {
-        caption,
-        parse_mode: 'Markdown',
-        ...mainMenuKb()
-      }
+      Input.fromLocalFile(process.cwd() + '/assets/logo.png'), // фикс пути
+      { caption, parse_mode: 'Markdown', ...mainMenuKb() }
     )
   } catch (err) {
     console.log('LOGO SEND ERROR:', err)
-    await ctx.reply(caption, {
-      parse_mode: 'Markdown',
-      ...mainMenuKb()
-    })
+    await ctx.reply(caption, { parse_mode: 'Markdown', ...mainMenuKb() })
   }
 }
