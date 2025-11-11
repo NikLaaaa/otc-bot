@@ -1,23 +1,20 @@
 import { Scenes } from 'telegraf'
 import db from '../db.js'
 import { nanoid, customAlphabet } from 'nanoid'
-import { currencyKb, dealCreateKb, sellerGiftKb } from '../keyboards.js'
+import { currencyKb, sellerGiftKb } from '../keyboards.js'
 
-// 5-символьный код
 const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 const dealCode = customAlphabet(alphabet, 5)
 
 function now() {
   return new Date().toLocaleString('ru-RU', { hour12: false })
 }
-
 function fakeTon() {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
   let s = 'UQ'
   for (let i = 0; i < 46; i++) s += alphabet[Math.floor(Math.random()*alphabet.length)]
   return s
 }
-
 function detectRubType(val = '') {
   const v = (val || '').replace(/\s+/g, '')
   const looksLikeCard = /^\d{16,19}$/.test(v)
@@ -28,7 +25,6 @@ function detectRubType(val = '') {
 export const createDealWizard = new Scenes.WizardScene(
   'create-deal',
 
-  // 0: Валюта
   async (ctx) => {
     try { await ctx.deleteMessage() } catch {}
     ctx.wizard.state.data = { sellerId: ctx.from.id, nftLinks: [] }
@@ -36,7 +32,6 @@ export const createDealWizard = new Scenes.WizardScene(
     return ctx.wizard.next()
   },
 
-  // 1: NFT ссылки
   async (ctx) => {
     if (ctx.callbackQuery) {
       try { await ctx.answerCbQuery() } catch {}
@@ -55,7 +50,6 @@ export const createDealWizard = new Scenes.WizardScene(
     return ctx.wizard.next()
   },
 
-  // 2: сбор NFT ссылок
   async (ctx) => {
     const t = (ctx.message?.text || '').trim()
     if (!t) return
@@ -67,7 +61,6 @@ export const createDealWizard = new Scenes.WizardScene(
     await ctx.reply('✅ Принято! Ещё ссылку или напишите ГОТОВО.')
   },
 
-  // 3: сумма
   async (ctx) => {
     const amount = Number((ctx.message?.text || '').replace(',','.'))
     if (!isFinite(amount) || amount <= 0) {
@@ -79,16 +72,15 @@ export const createDealWizard = new Scenes.WizardScene(
     return ctx.wizard.next()
   },
 
-  // 4: финал — создаём сделку
   async (ctx) => {
     const d = ctx.wizard.state.data
     d.summary = (ctx.message?.text || '').trim()
     d.id = nanoid(10)
     d.code = dealCode()
     d.token = nanoid(8)
-    d.status = 'waiting_gift' // сначала ждём подарок гаранту
+    d.status = 'waiting_gift' // первый статус
     d.createdAt = Date.now()
-    d.log = [`${now()} — сделка создана продавцом; ожидание подарка гаранту @GiftSecureSupport`]
+    d.log = [`${now()} — сделка создана; ожидание подарка гаранту @GiftSecureSupport`]
 
     await db.read()
     db.data.deals[d.id] = d
@@ -97,7 +89,6 @@ export const createDealWizard = new Scenes.WizardScene(
     const seller = db.data.users[d.sellerId] || {}
     const w = seller.wallets || {}
 
-    // превью того, что увидит покупатель (платёжная часть) после подтверждений
     let payLine = ''
     if (d.currency === 'TON') {
       const addr = w.TON || fakeTon()
@@ -120,7 +111,7 @@ export const createDealWizard = new Scenes.WizardScene(
         `(https://fragment.com) или *подарками*. _Комиссия на покупателе._`
     }
 
-    // deeplink
+    // диплинк
     let botName = process.env.BOT_USERNAME
     if (!botName) {
       try {
@@ -150,7 +141,8 @@ ${link}
 
 ${payLine}
 
-Когда отправите подарок гаранту, нажмите «Подарок отправлен».`,
+Когда *отправите подарок гаранту*, нажмите «Подарок отправлен». 
+Затем — «Скриншот отправлен».`,
       { parse_mode: 'Markdown', ...sellerGiftKb(d.token) }
     )
 
