@@ -36,10 +36,18 @@ bot.use(stage.middleware())
 
 // /start
 bot.start(async (ctx) => {
+  // если пользователь внутри сцены создания сделки — игнорируем /startPayload
+  if (ctx.wizard?.state && ctx.scene?.current?.id === 'create-deal') {
+    return
+  }
+
   try { await ctx.scene.leave() } catch {}
-  if (ctx.startPayload && ctx.startPayload.trim().length > 0) {
+
+  // Если payload действительно валидный и не совпадает со статусом ввода NFT-ссылок — только тогда диплинк
+  if (ctx.startPayload && ctx.startPayload.trim().length > 0 && !ctx.wizard?.state?.data?.nftLinks) {
     return deeplink(ctx)
   }
+
   return start(ctx)
 })
 
