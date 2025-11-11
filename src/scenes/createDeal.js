@@ -9,7 +9,7 @@ const dealCode = customAlphabet(alphabet, 5)
 export const createDealWizard = new Scenes.WizardScene(
   'create-deal',
 
-  // шаг 0 — выбрать валюту
+  // шаг 0 — выбираем валюту (ВСЕГДА, даже если ранее выбрана)
   async (ctx) => {
     try { await ctx.deleteMessage() } catch {}
     ctx.wizard.state.data = { sellerId: ctx.from.id, nftLinks: [] }
@@ -18,7 +18,7 @@ export const createDealWizard = new Scenes.WizardScene(
     return ctx.wizard.next()
   },
 
-  // шаг 1 — собрать NFT-ссылки
+  // шаг 1 — получаем валюту и просим реквизит под валюту (карта/номер/TON). Для Stars — пропускаем.
   async (ctx) => {
     if (ctx.callbackQuery) {
       try { await ctx.answerCbQuery() } catch {}
@@ -26,19 +26,57 @@ export const createDealWizard = new Scenes.WizardScene(
     }
     const cb = ctx.callbackQuery?.data
     if (!cb?.startsWith('cur:')) return
-    ctx.wizard.state.data.currency = cb.split(':')[1]
+    const currency = cb.split(':')[1]
+    ctx.wizard.state.data.currency = currency
 
-    const msg = await ctx.reply(
-      'Вставьте ссылку на NFT подарок(и). Можно несколько — по одной.\n' +
-      'Пример: https://t.me/nft/PlushPepe-2790\n\n' +
-      'Когда закончите — напишите: ГОТОВО'
-    )
+    if (currency === 'STARS') {
+      const msg = await ctx.reply(
+        'Вставьте ссылку на NFT подарок(и). Можно несколько — по одной.\n' +
+        'Пример: https://t.me/nft/PlushPepe-2790\n\n' +
+        'Когда закончите — напишите: ГОТОВО'
+      )
+      ctx.wizard.state.data.lastMsgId = msg.message_id
+      return ctx.wizard.next()
+    }
+
+    // просим реквизит под выбранную валюту (даже если был — перезапишем)
+    const hint =
+      currency === 'RUB'
+        ? 'Введите реквизит для RUB: карта (16–19 цифр) ИЛИ номер телефона (+79XXXXXXXXX)'
+        : currency === 'UAH'
+          ? 'Введите реквизит для UAH: карта (например, 5375 XXXX XXXX XXXX)'
+          : 'Введите реквизит для TON: кошелёк (адрес, начинающийся обычно с EQ/UQ)'
+    const msg = await ctx.reply(hint)
+    ctx.wizard.state.data.awaitWallet = true
     ctx.wizard.state.data.lastMsgId = msg.message_id
-    return ctx.wizard.next()
   },
 
-  // шаг 2 — сбор ссылок
+  // шаг 2 — сохраняем реквизит (если не STARS), затем спрашиваем NFT ссылки
   async (ctx) => {
+    // если ждали реквизит — сохраняем
+    if (ctx.wizard.state.data.awaitWallet) {
+      const raw = (ctx.message?.text || '').trim()
+      const currency = ctx.wizard.state.data.currency
+
+      await db.read()
+      db.data.users[ctx.from.id] ||= { id: ctx.from.id }
+      db.data.users[ctx.from.id].wallets ||= {}
+      db.data.users[ctx.from.id].wallets[currency] = raw
+      await db.write()
+
+      ctx.wizard.state.data.awaitWallet = false
+      await ctx.reply('✅ Реквизит сохранён.')
+      // и сразу просим NFT ссылки
+      const msg = await ctx.reply(
+        'Вставьте ссылку на NFT подарок(и). Можно несколько — по одной.\n' +
+        'Пример: https://t.me/nft/PlushPepe-2790\n\n' +
+        'Когда закончите — напишите: ГОТОВО'
+      )
+      ctx.wizard.state.data.lastMsgId = msg.message_id
+      return
+    }
+
+    // иначе — это сбор ссылок NFT
     const t = (ctx.message?.text || '').trim()
     if (!t) return
     if (t.toLowerCase() === 'готово') {
