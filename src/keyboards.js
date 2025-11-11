@@ -26,7 +26,7 @@ export const currencyKb = () =>
     { columns: 1 }
   )
 
-// Кнопки под карточкой сделки (покупателю)
+// Кнопки под карточкой сделки (классические pay/cancel — для покупателя)
 export const dealActionsKb = (token) =>
   Markup.inlineKeyboard(
     [
@@ -36,7 +36,7 @@ export const dealActionsKb = (token) =>
     { columns: 1 }
   )
 
-// Меню кошельков
+// Меню управления кошельками + вывод
 export const walletMenuKb = () =>
   Markup.inlineKeyboard(
     [
@@ -61,6 +61,35 @@ export const adminMenuKb = () =>
       [Markup.button.callback('💳 Пометить оплату по коду', 'admin:markpaid')],
       [Markup.button.callback('📋 Список открытых сделок', 'admin:list')],
       [Markup.button.callback('⬅️ В меню', 'admin:back')]
+    ],
+    { columns: 1 }
+  )
+
+// Новые клавиатуры для сценария «гарант-подарок»
+export const sellerGiftKb = (token) =>
+  Markup.inlineKeyboard(
+    [
+      [Markup.button.callback('✅ Подарок отправлен', `seller:gift_sent:${token}`)],
+      [Markup.button.callback('❌ Отменить сделку', `seller:cancel:${token}`)]
+    ],
+    { columns: 1 }
+  )
+
+export const buyerGiftKb = (token) =>
+  Markup.inlineKeyboard(
+    [
+      [Markup.button.callback('✅ Подарок получен', `buyer:gift_received:${token}`)]
+    ],
+    { columns: 1 }
+  )
+
+// Клавиатура после создания сделки (быстрые действия)
+export const dealCreateKb = () =>
+  Markup.inlineKeyboard(
+    [
+      [Markup.button.callback('🧾 Создать ещё', 'deal:create')],
+      [Markup.button.callback('👛 Кошельки', 'wallet:manage')],
+      [Markup.button.callback('⬇️ Вывод средств', 'w:WITHDRAW')]
     ],
     { columns: 1 }
   )
