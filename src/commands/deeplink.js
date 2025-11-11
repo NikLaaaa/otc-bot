@@ -10,19 +10,14 @@ export default async (ctx) => {
   const deal = Object.values(db.data.deals || {}).find(d => d.token === token)
   if (!deal) return ctx.reply('Сделка не найдена.')
 
-  // продавец по своей ссылке — ничего
-  if (deal.sellerId === ctx.from.id) return
+  if (deal.sellerId === ctx.from.id) return // продавец по своей ссылке
 
-  // зарегистрируем покупателя и уведомим продавца (1 раз), показывая его успешные сделки
   if (!deal.buyerId) {
     deal.buyerId = ctx.from.id
-    deal.log ||= []
-    deal.log.push(`Покупатель @${ctx.from.username || ctx.from.id} присоединился.`)
     await db.write()
 
     const buyer = db.data.users[deal.buyerId] || {}
     const succ = buyer.successCount || 0
-
     try {
       await ctx.telegram.sendMessage(
         deal.sellerId,
@@ -36,16 +31,8 @@ export default async (ctx) => {
     } catch {}
   }
 
-  // покупателю стартовый экран (ждём действий продавца)
-  const caption =
-`✅ Вы присоединились к сделке.
-Ожидайте действий продавца. Когда продавец отправит подарок — продолжим.`
+  const caption = '✅ Вы присоединились к сделке. Ожидайте действий продавца.'
   try {
-    await ctx.replyWithPhoto(
-      Input.fromLocalFile(process.cwd() + '/src/assets/logo.png'),
-      { caption, parse_mode: 'Markdown' }
-    )
-  } catch {
-    await ctx.reply(caption, { parse_mode: 'Markdown' })
-  }
+    await ctx.replyWithPhoto(Input.fromLocalFile(process.cwd() + '/src/assets/join.jpg'), { caption })
+  } catch { await ctx.reply(caption) }
 }
