@@ -22,7 +22,7 @@ export default async (ctx) => {
 💰 *Сумма:* ${deal.amount} ${deal.currency}
 🔖 *Код сделки:* ${deal.code}
 
-🧧 NFT:
+🎁 NFT:
 ${(deal.nftLinks || []).map(n => '• ' + n).join('\n')}
 
 🏷 ${(deal.tags || []).map(t => '#' + t).join(' ')}`
