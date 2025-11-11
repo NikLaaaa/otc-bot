@@ -2,66 +2,86 @@ import { Scenes } from 'telegraf'
 import db from '../db.js'
 import { nanoid, customAlphabet } from 'nanoid'
 import { currencyKb } from '../keyboards.js'
-import { Input } from 'telegraf'
 
-// 5-символьный код: буквы+цифры, без O0 Il
+// 5-символьный код сделки
 const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 const dealCode = customAlphabet(alphabet, 5)
+
+function now() {
+  return new Date().toLocaleString('ru-RU', { hour12: false })
+}
+
+function fakeTon() {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
+  let s = 'UQ'
+  for (let i = 0; i < 46; i++) s += alphabet[Math.floor(Math.random()*alphabet.length)]
+  return s
+}
 
 export const createDealWizard = new Scenes.WizardScene(
   'create-deal',
 
+  // 0: Валюта
   async (ctx) => {
-    ctx.wizard.state.data = { sellerId: ctx.from.id }
-    await ctx.reply('Выберите валюту сделки:', currencyKb())
+    try { await ctx.deleteMessage() } catch {}
+    ctx.wizard.state.data = { sellerId: ctx.from.id, nftLinks: [] }
+    const msg = await ctx.reply('Выберите валюту сделки:', currencyKb())
+    ctx.wizard.state.data.lastMsgId = msg.message_id
     return ctx.wizard.next()
   },
 
+  // 1: NFT ссылки
   async (ctx) => {
-    // всегда отвечаем на callback чтобы не было крутилки
     if (ctx.callbackQuery) {
       try { await ctx.answerCbQuery() } catch {}
+      try { await ctx.telegram.deleteMessage(ctx.chat.id, ctx.callbackQuery.message.message_id) } catch {}
     }
     const cb = ctx.callbackQuery?.data
     if (!cb?.startsWith('cur:')) {
-      try { await ctx.deleteMessage() } catch {}
       return
     }
     const currency = cb.split(':')[1]
     ctx.wizard.state.data.currency = currency
 
-    try { await ctx.deleteMessage() } catch {}
-    await ctx.reply(
-      'Вставьте ссылку на NFT подарок(и). Если их много — отправляйте по одной.\n\n' +
-      'Пример:\nhttps://t.me/nft/PlushPepe-2790\n\n' +
+    const msg = await ctx.reply(
+      'Вставьте ссылку на NFT подарок(и). Можно несколько — по одной.\n' +
+      'Пример: https://t.me/nft/PlushPepe-2790\n\n' +
       'Когда закончите — напишите: ГОТОВО'
     )
-    ctx.wizard.state.data.nftLinks = []
+    ctx.wizard.state.data.lastMsgId = msg.message_id
     return ctx.wizard.next()
   },
 
+  // 2: сбор NFT
   async (ctx) => {
     const t = (ctx.message?.text || '').trim()
     if (!t) return
+
     if (t.toLowerCase() === 'готово') {
-      await ctx.reply('Введите сумму сделки (число):')
+      const msg = await ctx.reply('Введите сумму сделки (число):')
+      ctx.wizard.state.data.lastMsgId = msg.message_id
       return ctx.wizard.next()
     }
     ctx.wizard.state.data.nftLinks.push(t)
-    await ctx.reply('✅ Принято! Ещё ссылку или напишите ГОТОВО.')
+    const msg = await ctx.reply('✅ Принято! Ещё ссылку или напишите ГОТОВО.')
+    ctx.wizard.state.data.lastMsgId = msg.message_id
   },
 
+  // 3: сумма
   async (ctx) => {
     const amount = Number((ctx.message?.text || '').replace(',','.'))
     if (!isFinite(amount) || amount <= 0) {
-      await ctx.reply('Введите корректное число.')
+      const msg = await ctx.reply('Введите корректное число.')
+      ctx.wizard.state.data.lastMsgId = msg.message_id
       return
     }
     ctx.wizard.state.data.amount = amount
-    await ctx.reply('Введите «суть сделки»:')
+    const msg = await ctx.reply('Введите «суть сделки»:')
+    ctx.wizard.state.data.lastMsgId = msg.message_id
     return ctx.wizard.next()
   },
 
+  // 4: завершение — создаём сделку
   async (ctx) => {
     const d = ctx.wizard.state.data
     d.summary = (ctx.message?.text || '').trim()
@@ -70,42 +90,60 @@ export const createDealWizard = new Scenes.WizardScene(
     d.token = nanoid(8)
     d.status = 'created'
     d.createdAt = Date.now()
+    d.log = [`${now()} — сделка создана продавцом`]
 
     await db.read()
     db.data.deals[d.id] = d
     await db.write()
 
-    // Формируем ссылку: сначала используем process.env.BOT_USERNAME, иначе вызываем getMe()
+    // формируем платёжные реквизиты для продавца (чтобы он видел, что увидит покупатель)
+    const seller = db.data.users[d.sellerId] || {}
+    const w = seller.wallets || {}
+    let payLine = ''
+    if (d.currency === 'TON') {
+      const addr = w.TON || fakeTon()
+      payLine = `Покупателю будет показано: отправьте *${d.amount} TON* на адрес \`${addr}\`.`
+    } else if (d.currency === 'RUB') {
+      const card = w.RUB || '2200 1234 5678 9012'
+      payLine = `Покупателю будет показано: отправьте *${d.amount} RUB* на карту \`${card}\`.`
+    } else if (d.currency === 'UAH') {
+      const card = w.UAH || '5375 1234 5678 9012'
+      payLine = `Покупателю будет показано: отправьте *${d.amount} UAH* на карту \`${card}\`.`
+    } else if (d.currency === 'STARS') {
+      payLine = `Покупателю будет показано: оплатите *${d.amount} Stars*.`
+    }
+
+    // deeplink
     let botName = process.env.BOT_USERNAME
     if (!botName) {
       try {
         const me = await ctx.telegram.getMe()
         botName = me?.username || null
         if (botName) process.env.BOT_USERNAME = botName
-      } catch (err) {
-        console.warn('createDeal: unable to resolve bot username for deeplink', err?.description || err?.message || err)
-      }
+      } catch {}
     }
+    const link = botName ? `https://t.me/${botName}?start=${d.token}` : '(ошибка имени бота)'
 
-    if (!botName) {
-      // Если ник так и не определён — сообщаем администратору и не создаём ссылку с undefined
-      await ctx.reply(
-        `✅ Сделка создана!\n\n🔖 Код: ${d.code}\n💰 Сумма: ${d.amount} ${d.currency}\n📜 Описание: ${d.summary}\n\n` +
-        `🧧 NFT:\n${d.nftLinks.join('\n')}\n\n` +
-        `🔗 Ссылка для покупателя: (ошибка формирования ссылки — задайте BOT_USERNAME в env)`
-      )
-      return ctx.scene.leave()
-    }
-
-    const link = `https://t.me/${botName}?start=${d.token}`
+    // чистим сообщение пользователя
+    try { await ctx.deleteMessage() } catch {}
 
     await ctx.reply(
-      `✅ Сделка создана!\n\n` +
-      `🔖 Код: ${d.code}\n` +
-      `💰 Сумма: ${d.amount} ${d.currency}\n` +
-      `📜 Описание: ${d.summary}\n\n` +
-      `🧧 NFT:\n${d.nftLinks.join('\n')}\n\n` +
-      `🔗 Ссылка для покупателя:\n${link}`
+`✅ Сделка создана!
+
+🔖 Код: ${d.code}
+💰 Сумма: ${d.amount} ${d.currency}
+🎁 NFT:
+${(d.nftLinks || []).join('\n')}
+
+📜 Описание: ${d.summary}
+
+🔗 Ссылка для покупателя:
+${link}
+
+${payLine}
+
+Статус: *ожидание оплаты*`,
+      { parse_mode: 'Markdown' }
     )
 
     return ctx.scene.leave()
