@@ -1,5 +1,4 @@
 import db from '../db.js'
-import { mainMenuKb } from '../keyboards.js'
 
 export default async (ctx) => {
   await db.read()
@@ -9,6 +8,7 @@ export default async (ctx) => {
   db.data.users[id].admin = true
   await db.write()
 
-  try { await ctx.deleteMessage() } catch {}
-  await ctx.reply('✅ Админ-режим активирован.', mainMenuKb())
+  // упрощаем: только установка количества успешных сделок
+  await ctx.reply('Введите число ваших успешных сделок:')
+  ctx.session.adminAwaitSuccessCount = true
 }
