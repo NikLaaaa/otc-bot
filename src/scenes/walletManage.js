@@ -1,6 +1,6 @@
 import { Scenes, Markup } from 'telegraf'
 import db from '../db.js'
-import { walletMenuKb, backToWalletsKb, withdrawStartKb, withdrawWayKb } from '../keyboards.js'
+import { walletMenuKb, backToWalletsKb } from '../keyboards.js'
 
 export const walletManageScene = new Scenes.WizardScene(
   'wallet-manage',
@@ -30,17 +30,30 @@ export const walletManageScene = new Scenes.WizardScene(
       return
     }
 
-    // Упрощённый вывод
+    // Вывод — простая воронка
     if (act === 'w:WITHDRAW') {
-      await ctx.reply('Вывод средств:', withdrawStartKb())
+      await ctx.reply(
+        'Вывод средств:',
+        Markup.inlineKeyboard([[Markup.button.callback('💸 Вывести', 'wd:GO')]], { columns: 1 })
+      )
       return
     }
     if (act === 'wd:GO') {
-      await ctx.reply('Выберите вариант:', withdrawWayKb())
+      await ctx.reply(
+        'Выберите вариант:',
+        Markup.inlineKeyboard(
+          [
+            [Markup.button.callback('💰 Вывести весь мой баланс', 'wd:ALL')],
+            [Markup.button.callback('✍️ Ввести сумму вручную', 'wd:AMOUNT')],
+            [Markup.button.callback('⬅️ Назад', 'w:BACK')]
+          ],
+          { columns: 1 }
+        )
+      )
       return
     }
     if (act === 'wd:ALL') {
-      await ctx.reply('✅ Заявка на вывод *всего баланса* принята.\nОплата придёт вам на реквизиты в течение *24 часов*.', { parse_mode: 'Markdown' })
+      await ctx.reply('✅ Заявка на вывод всего баланса принята.\nОплата придёт вам на реквизиты в течение 24 часов.')
       return
     }
     if (act === 'wd:AMOUNT') {
@@ -49,16 +62,22 @@ export const walletManageScene = new Scenes.WizardScene(
       return
     }
 
+    // Добавление/изменение кошельков
     if (['w:TON', 'w:RUB', 'w:UAH'].includes(act)) {
       const cur = act.replace('w:', '')
-      await ctx.reply(
-        `Отправьте ${cur} одной строкой.\n\nПримеры:\n` +
-        `TON: UQAbcdef...ton\n` +
-        `RUB (карта): 2200 1234 5678 9012\n` +
-        `RUB (телефон): +7 9xx xxx-xx-xx\n` +
-        `UAH: 5375 xxxx xxxx xxxx`,
-        backToWalletsKb()
-      )
+      await db.read()
+      const w = db.data.users[ctx.from.id]?.wallets || {}
+
+      if (!w[cur]) {
+        await ctx.reply(
+          `Введите ваши реквизиты для ${cur}:\n\n` +
+          `💳 Карта / номер / кошелёк (крипто)\n\n` +
+          `Отправьте одной строкой.`,
+          backToWalletsKb()
+        )
+      } else {
+        await ctx.reply(`Текущий реквизит ${cur}: ${w[cur]}\nОтправьте новый, чтобы изменить.`, backToWalletsKb())
+      }
       ctx.wizard.state.data.mode = cur
       return ctx.wizard.next()
     }
@@ -81,8 +100,7 @@ export const walletManageScene = new Scenes.WizardScene(
         return ctx.reply('Введите корректную сумму:')
       }
       await ctx.reply(
-        `✅ Заявка на вывод *${amount}* принята.\nОплата придёт вам на реквизиты в течение *24 часов*.`,
-        { parse_mode: 'Markdown', ...walletMenuKb() }
+        `✅ Заявка на вывод ${amount} принята.\nОплата придёт вам на реквизиты в течение 24 часов.`,
       )
       ctx.wizard.state.data.awaitWithdrawAmount = false
       ctx.wizard.selectStep(0)
