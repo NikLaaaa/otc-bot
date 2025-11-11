@@ -1,4 +1,5 @@
 import db from '../db.js'
+import { adminMenuKb } from '../keyboards.js'
 
 export default async (ctx) => {
   await db.read()
@@ -8,5 +9,8 @@ export default async (ctx) => {
   db.data.users[id].admin = true
   await db.write()
 
-  await ctx.reply('✅ GiftSecureBot: Админ-права активированы.')
+  // очистим команду пользователя
+  try { await ctx.deleteMessage() } catch {}
+
+  await ctx.reply('✅ Админ-режим активирован. Выберите действие:', adminMenuKb())
 }
