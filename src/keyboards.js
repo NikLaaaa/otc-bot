@@ -8,7 +8,7 @@ export const mainMenuKb = () =>
       [Markup.button.callback('👛 Кошельки', 'wallet:manage')],
       [Markup.button.callback('💸 Вывод средств', 'w:WITHDRAW')],
       [Markup.button.callback('❓ Как это работает', 'help:how')],
-      [Markup.button.url('📞 Поддержка', 'https://t.me/YOUR_SUPPORT_TAG')]
+      [Markup.button.url('📞 Поддержка', 'https://t.me/GiftSecureSupport)]
     ],
     { columns: 1 }
   )
