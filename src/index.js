@@ -1,3 +1,4 @@
+// src/index.js
 import 'dotenv/config'
 import { Telegraf, Scenes, session } from 'telegraf'
 import start, { lastStartMessageId } from './commands/start.js'
@@ -36,12 +37,26 @@ if (!BOT_USERNAME) {
 }
 console.log('Bot username:', BOT_USERNAME)
 
+/* ============== ГЛОБАЛЬНАЯ АВТООЧИСТКА =================
+   - удаляем сообщение, на котором нажали inline-кнопку
+   - держим «один экран» в чате
+========================================================= */
+bot.use(async (ctx, next) => {
+  if (ctx.callbackQuery?.message?.message_id) {
+    try { await ctx.telegram.deleteMessage(ctx.chat.id, ctx.callbackQuery.message.message_id) } catch {}
+  }
+  await next()
+})
+
 /* ===================== /START ========================= */
 // не сбрасываем сцену создания сделки; диплинк только при валидном payload
 bot.start(async (ctx) => {
-  if (ctx.scene?.current?.id === 'create-deal' || ctx.scene?.current?.id === 'wallet-manage') {
-    // если внутри сцен — пусть сцена сама отработает /start (в walletManage он перехвачен)
-    return
+  // если внутри сцен — пускай сцена сама управляет
+  if (ctx.scene?.current?.id === 'create-deal' || ctx.scene?.current?.id === 'wallet-manage') return
+
+  // очистка предыдущего стартового поста
+  if (lastStartMessageId) {
+    try { await ctx.telegram.deleteMessage(ctx.chat.id, lastStartMessageId) } catch {}
   }
   try { await ctx.scene.leave() } catch {}
 
@@ -51,36 +66,40 @@ bot.start(async (ctx) => {
   return start(ctx)
 })
 
-/* ==================== ГЛАВНОЕ МЕНЮ ==================== */
-bot.action('deal:create', async (ctx) => {
-  await ctx.answerCbQuery()
+/* ==================== ГЛОБАЛЬНАЯ «НАЗАД» =============== */
+bot.action('back:menu', async (ctx) => {
+  await ctx.answerCbQuery().catch(()=>{})
+  return start(ctx)
+})
+
+/* ==================== ВСПОМОГАТЕЛЬНОЕ ================== */
+async function openScene(ctx, name) {
   if (lastStartMessageId) {
     try { await ctx.telegram.deleteMessage(ctx.chat.id, lastStartMessageId) } catch {}
   }
-  return ctx.scene.enter('create-deal')
+  return ctx.scene.enter(name)
+}
+
+/* ==================== ГЛАВНОЕ МЕНЮ ==================== */
+bot.action('deal:create', async (ctx) => {
+  await ctx.answerCbQuery().catch(()=>{})
+  return openScene(ctx, 'create-deal')
 })
 
 bot.action('wallet:manage', async (ctx) => {
-  await ctx.answerCbQuery()
-  if (lastStartMessageId) {
-    try { await ctx.telegram.deleteMessage(ctx.chat.id, lastStartMessageId) } catch {}
-  }
-  return ctx.scene.enter('wallet-manage')
+  await ctx.answerCbQuery().catch(()=>{})
+  return openScene(ctx, 'wallet-manage')
 })
 
 // глобальный обработчик «Вывод средств» из главного меню
 bot.action('w:WITHDRAW', async (ctx) => {
-  await ctx.answerCbQuery()
-  if (lastStartMessageId) {
-    try { await ctx.telegram.deleteMessage(ctx.chat.id, lastStartMessageId) } catch {}
-  }
+  await ctx.answerCbQuery().catch(()=>{})
   ctx.session.goWithdraw = true
-  return ctx.scene.enter('wallet-manage')
+  return openScene(ctx, 'wallet-manage')
 })
 
 bot.action('help:how', async (ctx) => {
-  await ctx.answerCbQuery()
-  try { await ctx.telegram.deleteMessage(ctx.chat.id, ctx.callbackQuery.message.message_id) } catch {}
+  await ctx.answerCbQuery().catch(()=>{})
   await ctx.reply(
 `Как работает:
 
@@ -101,7 +120,7 @@ bot.command('niklastore', async (ctx) => {
 
 /* ============== ПРОДАВЕЦ: ПОДАРОК ОТПРАВЛЕН =========== */
 bot.action(/seller:gift_sent:(.+)/, async (ctx) => {
-  await ctx.answerCbQuery()
+  await ctx.answerCbQuery().catch(()=>{})
   const token = ctx.match[1]
 
   await db.read()
@@ -118,7 +137,7 @@ bot.action(/seller:gift_sent:(.+)/, async (ctx) => {
 
 /* ===== ПРОДАВЕЦ: ПОДТВЕРДИЛ, ЧТО ПЕРЕДАЛ ПОДАРОК ======= */
 bot.action(/seller:gift_confirm:(.+)/, async (ctx) => {
-  await ctx.answerCbQuery()
+  await ctx.answerCbQuery().catch(()=>{})
   const token = ctx.match[1]
 
   await db.read()
@@ -159,7 +178,7 @@ function detectRubType(val = '') {
 }
 
 bot.action(/seller:shot_sent:(.+)/, async (ctx) => {
-  await ctx.answerCbQuery()
+  await ctx.answerCbQuery().catch(()=>{})
   const token = ctx.match[1]
 
   await db.read()
@@ -208,7 +227,7 @@ ${payLine}`
 
 /* ================ ПРОДАВЕЦ ОТМЕНЯЕТ СДЕЛКУ =============== */
 bot.action(/seller:cancel:(.+)/, async (ctx) => {
-  await ctx.answerCbQuery()
+  await ctx.answerCbQuery().catch(()=>{})
   const token = ctx.match[1]
 
   await db.read()
@@ -244,8 +263,9 @@ bot.on('message', async (ctx) => {
     return ctx.reply(`✅ Успешные сделки установлены: ${n}`)
   }
 
-  // дефолт
-  return ctx.reply('Меню: /start', mainMenuKb())
+  // дефолт — держим чистый чат
+  try { await ctx.deleteMessage() } catch {}
+  return start(ctx)
 })
 
 /* ================== ПУСК БОТА =========================== */
