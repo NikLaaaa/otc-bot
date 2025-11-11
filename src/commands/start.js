@@ -1,30 +1,27 @@
 import { Input } from 'telegraf'
-import { BRAND_NAME } from '../brand.js'
-import { mainMenuKb } from '../keyboards.js'
+import { HERO_TEXT, mainMenuKb } from '../keyboards.js'
 
 export let lastStartMessageId = null
 
 export default async function start(ctx) {
+  // удаляем предыдущее старт-сообщение, чтобы всегда оставалось одно
+  if (lastStartMessageId) {
+    try { await ctx.telegram.deleteMessage(ctx.chat.id, lastStartMessageId) } catch {}
+  }
   try { if (ctx.message) await ctx.deleteMessage() } catch {}
-  const caption =
-`*${BRAND_NAME} — Safe & Automatic*
 
-Почему выбирают нас:
-🔒 Гарантия безопасности — все сделки защищены
-💎 Быстрые выплаты — в любой валюте
-🛡 Круглосуточная поддержка
-⚡️ Простой и понятный интерфейс`
-
+  // сначала текст (шапка), потом меню
+  const caption = HERO_TEXT
+  let msg
   try {
-    const msg = await ctx.replyWithPhoto(
+    msg = await ctx.replyWithPhoto(
       Input.fromLocalFile(process.cwd() + '/src/assets/hero.jpg'),
       { caption, parse_mode: 'Markdown' }
     )
-    lastStartMessageId = msg.message_id
   } catch {
-    const msg = await ctx.reply(caption, { parse_mode: 'Markdown' })
-    lastStartMessageId = msg.message_id
+    msg = await ctx.reply(caption, { parse_mode: 'Markdown' })
   }
+  lastStartMessageId = msg.message_id
 
   await ctx.reply('Главное меню:', mainMenuKb())
 }
