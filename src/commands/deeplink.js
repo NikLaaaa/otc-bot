@@ -2,19 +2,6 @@ import db from '../db.js'
 import { Input } from 'telegraf'
 import { sellerGiftStep1Kb } from '../keyboards.js'
 
-function fakeTon() {
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
-  let s = 'UQ'
-  for (let i = 0; i < 46; i++) s += alphabet[Math.floor(Math.random()*alphabet.length)]
-  return s
-}
-function detectRubType(val = '') {
-  const v = (val || '').replace(/\s+/g, '')
-  const looksCard = /^\d{16,19}$/.test(v)
-  const looksPhone = /^(\+7|7|8)\d{10}$/.test(v)
-  return looksCard ? 'card' : (looksPhone ? 'phone' : null)
-}
-
 export default async (ctx) => {
   const token = ctx.startPayload
   if (!token || token.length < 6) return ctx.reply('Откройте меню: /start')
@@ -26,16 +13,20 @@ export default async (ctx) => {
   // продавец по своей ссылке — ничего
   if (deal.sellerId === ctx.from.id) return
 
-  // зарегистрируем покупателя и уведомим продавца (только 1 раз)
+  // зарегистрируем покупателя и уведомим продавца (1 раз), показывая его успешные сделки
   if (!deal.buyerId) {
     deal.buyerId = ctx.from.id
     deal.log ||= []
     deal.log.push(`Покупатель @${ctx.from.username || ctx.from.id} присоединился.`)
     await db.write()
+
+    const buyer = db.data.users[deal.buyerId] || {}
+    const succ = buyer.successCount || 0
+
     try {
       await ctx.telegram.sendMessage(
         deal.sellerId,
-        `👤 @${ctx.from.username || ctx.from.id} присоединился к сделке ${deal.code}.`
+        `👤 @${ctx.from.username || ctx.from.id} присоединился к сделке ${deal.code} (успешных: ${succ}).`
       )
       await ctx.telegram.sendMessage(
         deal.sellerId,
