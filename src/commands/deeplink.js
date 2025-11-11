@@ -2,14 +2,13 @@ import db from '../db.js'
 import { dealActionsKb, buyerGiftKb } from '../keyboards.js'
 import { Input } from 'telegraf'
 
-// синтетический похожий на TON адрес (для примеров)
+// фейковый TON-адрес для примеров
 function fakeTon() {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
   let s = 'UQ'
   for (let i = 0; i < 46; i++) s += alphabet[Math.floor(Math.random()*alphabet.length)]
   return s
 }
-
 function detectRubType(val = '') {
   const v = (val || '').replace(/\s+/g, '')
   const looksLikeCard = /^\d{16,19}$/.test(v)
@@ -25,10 +24,20 @@ export default async (ctx) => {
   const deal = Object.values(db.data.deals || {}).find(d => d.token === token)
   if (!deal) return ctx.reply('Сделка не найдена.')
 
-  // продавцу: по его ссылке ничего не показываем (по твоему требованию)
-  if (deal.sellerId === ctx.from.id) return
+  // первый заход покупателя: зафиксируем buyerId и уведомим продавца
+  if (!deal.buyerId && deal.sellerId !== ctx.from.id) {
+    deal.buyerId = ctx.from.id
+    deal.log ||= []
+    deal.log.push('Покупатель присоединился к сделке.')
+    await db.write()
+    try {
+      await ctx.telegram.sendMessage(deal.sellerId, `👤 Покупатель присоединился к сделке ${deal.code}.`)
+    } catch {}
+  }
 
-  // платёжная инструкция (используется позже)
+  if (deal.sellerId === ctx.from.id) return // продавцу свою ссылку не показываем
+
+  // платёжная инструкция (для этапов после скрина)
   const seller = db.data.users[deal.sellerId] || {}
   const w = seller.wallets || {}
   let payLine = ''
@@ -53,7 +62,7 @@ export default async (ctx) => {
       `или *подарками* в Telegram.\n\n_Комиссия на покупателе._`
   }
 
-  // разная карточка по статусам
+  // статусные карточки
   if (deal.status === 'waiting_gift') {
     const text =
 `🎁 *Ожидание подарка гаранту* @GiftSecureSupport
@@ -61,7 +70,7 @@ export default async (ctx) => {
 🧾 Описание: ${deal.summary}
 💰 Сумма: ${deal.amount} ${deal.currency}
 
-Пока продавец не передал подарок гаранту — оплата недоступна.`
+Продавец должен отправить подарок гаранту. Ожидайте.`
     try {
       await ctx.replyWithPhoto(
         Input.fromLocalFile(process.cwd() + '/src/assets/logo.png'),
@@ -75,10 +84,8 @@ export default async (ctx) => {
 
   if (deal.status === 'gift_sent') {
     const text =
-`📸 Продавец отправил подарок гаранту.
-
-Пришлите скриншот получения подарка.
-После этого нажмите «Подарок получен».`
+`📦 Подарок отправлен гаранту.
+📸 Ожидаем скриншот передачи подарка покупателю от продавца.`
     try {
       await ctx.replyWithPhoto(
         Input.fromLocalFile(process.cwd() + '/src/assets/logo.png'),
@@ -90,15 +97,22 @@ export default async (ctx) => {
     return
   }
 
-  // остальные статусы — классическая карточка с кнопками оплатить/отменить
+  if (deal.status === 'await_payment') {
+    const text =
+`⏳ Ожидание оплаты от покупателя.
+
+Реквизиты:
+${payLine}`
+    return ctx.reply(text, { parse_mode: 'Markdown', ...dealActionsKb(deal.token) })
+  }
+
+  // дефолт (старое поведение)
   const text =
 `🧾 *Описание:* ${deal.summary}
 💰 *Сумма:* ${deal.amount} ${deal.currency}
 🔖 *Код сделки:* ${deal.code}
 
-💡 Реквизиты для оплаты будут показаны после подтверждения получения подарка (если применимо).
-
-После оплаты нажмите «Оплатить».`
+После подтверждения шагов появятся реквизиты для оплаты.`
   try {
     await ctx.replyWithPhoto(
       Input.fromLocalFile(process.cwd() + '/src/assets/logo.png'),
