@@ -6,9 +6,10 @@ export const mainMenuKb = () =>
     [
       [Markup.button.callback('🧾 Создать сделку', 'deal:create')],
       [Markup.button.callback('👛 Кошельки', 'wallet:manage')],
+      [Markup.button.callback('⬇️ Вывод средств', 'wallet:manage')], // по твоей логике через меню кошельков
       [Markup.button.callback('🌐 Язык', 'lang:menu')],
-      [Markup.button.callback('⬇️ Вывод средств', 'wallet:manage')],
-      [Markup.button.url('📞 Поддержка', 'https://t.me/GiftSecureSupport')]
+      // поменяй на свой тег поддержки
+      [Markup.button.url('📞 Поддержка', 'https://t.me/YOUR_SUPPORT_TAG')]
     ],
     { columns: 1 }
   )
@@ -51,3 +52,15 @@ export const walletMenuKb = () =>
 
 export const backToWalletsKb = () =>
   Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'w:BACK')]])
+
+// ✅ НОВОЕ: клавиатура, которую импортирует createDeal.js
+// Показываем, что можно сразу создать ещё сделку / перейти к кошелькам / к выводу
+export const dealCreateKb = () =>
+  Markup.inlineKeyboard(
+    [
+      [Markup.button.callback('🧾 Создать ещё', 'deal:create')],
+      [Markup.button.callback('👛 Кошельки', 'wallet:manage')],
+      [Markup.button.callback('⬇️ Вывод средств', 'w:WITHDRAW')]
+    ],
+    { columns: 1 }
+  )
