@@ -1,11 +1,11 @@
 import { Markup } from 'telegraf'
 import { SUPPORT_LINK, OPEN_IN_APP_LINK } from './brand.js'
 
-// универсальная «Назад в меню»
+// ===== Универсальные =====
 export const backToMenuKb = () =>
   Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад в меню', 'back:menu')]], { columns: 1 })
 
-// главное меню как на скрине
+// ===== Главное меню (как на скрине) =====
 export const mainMenuKb = () =>
   Markup.inlineKeyboard(
     [
@@ -26,7 +26,7 @@ export const mainMenuKb = () =>
     { columns: 2 }
   )
 
-// язык
+// ===== Язык =====
 export const langKb = (current = 'Русский') =>
   Markup.inlineKeyboard(
     [
@@ -36,15 +36,17 @@ export const langKb = (current = 'Русский') =>
     { columns: 2 }
   )
 
-// профиль
+// ===== Профиль =====
 export const profileKb = () =>
-  Markup.inlineKeyboard([[Markup.button.callback('📘 Инструкция', 'menu:how')], [Markup.button.callback('⬅️ Назад', 'back:menu')]], { columns: 1 })
+  Markup.inlineKeyboard(
+    [[Markup.button.callback('📘 Инструкция', 'menu:how')], [Markup.button.callback('⬅️ Назад', 'back:menu')]],
+    { columns: 1 }
+  )
 
-// рейтинг
 export const ratingKb = () =>
   Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'back:menu')]], { columns: 1 })
 
-// сделка — выбор валюты + «Назад»
+// ===== Сделка =====
 export const currencyKb = () =>
   Markup.inlineKeyboard(
     [
@@ -57,11 +59,15 @@ export const currencyKb = () =>
     { columns: 1 }
   )
 
-// ожидание покупателя
 export const sellerAwaitBuyerKb = (token) =>
-  Markup.inlineKeyboard([[Markup.button.callback('❌ Отменить сделку', `seller:cancel:${token}`)], [Markup.button.callback('⬅️ Назад', 'back:menu')]], { columns: 1 })
+  Markup.inlineKeyboard(
+    [
+      [Markup.button.callback('❌ Отменить сделку', `seller:cancel:${token}`)],
+      [Markup.button.callback('⬅️ Назад', 'back:menu')]
+    ],
+    { columns: 1 }
+  )
 
-// шаги продавца
 export const sellerGiftStep1Kb = (token) =>
   Markup.inlineKeyboard(
     [
@@ -92,7 +98,7 @@ export const sellerShotSentKb = (token) =>
     { columns: 1 }
   )
 
-// кошельки меню (в сцене)
+// ===== Реквизиты / Вывод =====
 export const walletRootKb = () =>
   Markup.inlineKeyboard(
     [
@@ -128,4 +134,7 @@ export const withdrawCurrencyKb = () =>
   )
 
 export const withdrawAllKb = () =>
-  Markup.inlineKeyboard([[Markup.button.callback('🧾 Вывести весь баланс', 'wd:ALL')], [Markup.button.callback('⬅️ Назад', 'wallet:root')]], { columns: 1 })
+  Markup.inlineKeyboard(
+    [[Markup.button.callback('🧾 Вывести весь баланс', 'wd:ALL')], [Markup.button.callback('⬅️ Назад', 'wallet:root')]],
+    { columns: 1 }
+  )
