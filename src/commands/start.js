@@ -8,7 +8,7 @@ export function setStartMessageId(id) {
 
 export default async function start(ctx) {
   const text =
-`*GiftSecure — безопасный телеграм-гарант.*
+`*FunPay — безопасный телеграм-гарант.*
 
 ${HERO_TEXT}
 
