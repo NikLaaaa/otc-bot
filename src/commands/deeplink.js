@@ -25,7 +25,7 @@ export default async (ctx) => {
       )
       await ctx.telegram.sendMessage(
         deal.sellerId,
-        `Теперь отправьте подарок гаранту @GiftSecureSupport и действуйте по шагам.`,
+        `Теперь отправьте подарок гаранту @FunPayGuarantee и действуйте по шагам.`,
         sellerGiftStep1Kb(deal.token)
       )
     } catch {}
